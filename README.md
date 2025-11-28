@@ -35,8 +35,8 @@ response = client.post("/users", json={"name": "John"})
 
 ```
 
-#Advanced Usage
-##With Plugins
+# Advanced Usage
+ With Plugins
 
 
 ```bash
@@ -60,43 +60,46 @@ client = HTTPClient(
 
 ```
 
-#Development
-##Setup
+# Development
+Setup
 
-`Clone repository
+```bash
+#Clone repository
 git clone https://github.com/Git-Dalv/http-client-core.git
 cd http-client-core
 
-`Create virtual environment
+#Create virtual environment
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-`Install dependencies
+#Install dependencies
 pip install -e ".[dev]"
+```
 
-##Running Tests
-
-` Run all tests
+## Running Tests
+```bash
+#Run all tests
 pytest
 
-` With coverage
+#With coverage
 pytest --cov=src/http_client --cov-report=html
 
-` Run specific test
+#Run specific test
 pytest tests/unit/core/test_client.py
 
-##Code Quality
-`Format code
+## Code Quality
+#Format code
 black src tests
 
-`Lint
+#Lint
 ruff check src tests
 
-`Type checking
+#Type checking
 mypy src
+```
 
-
-#Project Structure
+# Project Structure
+```bash
 http-client-core/
 ├── src/
 │   └── http_client/
@@ -108,17 +111,19 @@ http-client-core/
 │   └── integration/       ` Integration tests
 ├── docs/                  ` Documentation
 └── examples/              ` Usage examples
+```
 
-
-#Roadmap
+# Roadmap
+```bash
 Core HTTP client implementation
- Plugin system
- Retry mechanism
- Rate limiting
- Caching support
- Async support (httpx backend)
- WebSocket support
+ * Plugin system
+ * Retry mechanism
+ * Rate limiting
+ * Caching support
+ * Async support (httpx backend)
+ * WebSocket support
+```
 
-#License
+# License
 
-##MIT License - see LICENSE file for details.
+MIT License - see LICENSE file for details.
