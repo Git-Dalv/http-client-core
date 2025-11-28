@@ -33,10 +33,13 @@ print(response.json())
 # POST with data
 response = client.post("/users", json={"name": "John"})
 
+```
 
 #Advanced Usage
 ##With Plugins
 
+
+```bash
 from http_client import HTTPClient
 from http_client.plugins import RetryPlugin, LoggingPlugin
 
@@ -54,6 +57,8 @@ client = HTTPClient(
     base_url="https://api.example.com",
     headers={"Authorization": "Bearer YOUR_TOKEN"}
 )
+
+```
 
 #Development
 ##Setup
