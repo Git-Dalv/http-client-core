@@ -83,8 +83,8 @@ def test_monitoring_status_code_stats():
     metrics = monitoring.get_metrics()
     assert 200 in metrics['status_code_stats']
     assert 201 in metrics['status_code_stats']
-    assert metrics['status_code_stats'][0] == 1
-    assert metrics['status_code_stats'][0] == 1
+    assert metrics['status_code_stats'][200] == 1
+    assert metrics['status_code_stats'][201] == 1
 
     client.close()
 
@@ -200,7 +200,7 @@ def test_monitoring_slowest_requests():
 
     # Проверяем что они отсортированы по времени (от большего к меньшему)
     if len(slowest) > 1:
-        assert slowest[0]['response_time'] >= slowest[0]['response_time']
+        assert slowest[0]['response_time'] >= slowest[1]['response_time']
 
     client.close()
 
@@ -283,5 +283,103 @@ def test_monitoring_print_summary():
     # Проверяем что print_summary не вызывает ошибок
     # (просто вызываем метод, он печатает в stdout)
     monitoring.print_summary()
+
+    client.close()
+
+
+def test_monitoring_endpoint_sorting():
+    """Тест правильной сортировки эндпоинтов по количеству запросов"""
+    monitoring = MonitoringPlugin()
+    client = HTTPClient(base_url="https://jsonplaceholder.typicode.com")
+    client.add_plugin(monitoring)
+
+    # Делаем разное количество запросов к разным эндпоинтам
+    client.get("/posts/1")  # 1 запрос
+    client.get("/posts/2")  # 1 запрос
+    client.get("/users/1")  # 1 запрос
+    client.get("/users/1")  # 2 запроса к /users/1
+    client.get("/users/1")  # 3 запроса к /users/1
+
+    # Получаем метрики
+    metrics = monitoring.get_metrics()
+    endpoint_metrics = metrics['endpoint_metrics']
+
+    # Проверяем что метрики собраны правильно
+    assert endpoint_metrics['/users/1']['count'] == 3
+    assert endpoint_metrics['/posts/1']['count'] == 1
+    assert endpoint_metrics['/posts/2']['count'] == 1
+
+    # Проверяем что сортировка работает (не вызывает ошибок)
+    # Это проверяет исправление бага с x[0]['count'] -> x[1]['count']
+    try:
+        monitoring.print_summary()
+        sort_works = True
+    except (KeyError, TypeError):
+        sort_works = False
+
+    assert sort_works, "print_summary должен работать без ошибок сортировки"
+
+    client.close()
+
+
+def test_monitoring_inf_min_time_handling():
+    """Тест обработки inf значения в min_time для эндпоинтов только с ошибками"""
+    monitoring = MonitoringPlugin(track_errors=True)
+    client = HTTPClient(base_url="https://jsonplaceholder.typicode.com")
+    client.add_plugin(monitoring)
+
+    # Делаем только неудачные запросы к одному эндпоинту
+    try:
+        client.get("/nonexistent-endpoint-12345")
+    except NotFoundError:
+        pass
+
+    try:
+        client.get("/nonexistent-endpoint-12345")
+    except NotFoundError:
+        pass
+
+    # Получаем метрики
+    metrics = monitoring.get_metrics()
+    endpoint_metrics = metrics['endpoint_metrics']
+
+    # Проверяем что эндпоинт был зарегистрирован
+    assert '/nonexistent-endpoint-12345' in endpoint_metrics
+
+    endpoint_data = endpoint_metrics['/nonexistent-endpoint-12345']
+
+    # Проверяем что min_time не inf (исправление бага)
+    assert endpoint_data['min_time'] != float('inf'), "min_time не должен быть inf"
+    assert endpoint_data['min_time'] == 0, "min_time должен быть 0 для эндпоинтов только с ошибками"
+
+    # Проверяем остальные метрики
+    assert endpoint_data['count'] == 2
+    assert endpoint_data['errors'] == 2
+    assert endpoint_data['max_time'] == 0
+
+    client.close()
+
+
+def test_monitoring_mixed_success_and_errors():
+    """Тест метрик эндпоинта со смешанными успешными и неудачными запросами"""
+    monitoring = MonitoringPlugin()
+    client = HTTPClient(base_url="https://jsonplaceholder.typicode.com")
+    client.add_plugin(monitoring)
+
+    # Успешный запрос
+    client.get("/posts/1")
+
+    # Проверяем что min_time установлен правильно
+    metrics = monitoring.get_metrics()
+    endpoint_metrics = metrics['endpoint_metrics']
+
+    assert '/posts/1' in endpoint_metrics
+    endpoint_data = endpoint_metrics['/posts/1']
+
+    # min_time должен быть больше 0 и не inf
+    assert endpoint_data['min_time'] > 0
+    assert endpoint_data['min_time'] != float('inf')
+    assert endpoint_data['count'] == 1
+    assert endpoint_data['errors'] == 0
 
     client.close()

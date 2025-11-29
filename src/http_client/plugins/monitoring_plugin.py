@@ -74,40 +74,50 @@ class MonitoringPlugin(Plugin):
         self._request_history: List[Dict[str, Any]] = []
         self._error_history: List[Dict[str, Any]] = []
 
-    def before_request(self, **kwargs: Any) -> None:
+    def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         """
         Вызывается перед отправкой запроса.
         Сохраняет время начала запроса.
 
         Args:
+            method: HTTP метод
+            url: URL запроса
             **kwargs: Параметры запроса
-        """
-        # Сохраняем время начала запроса
-        kwargs['_start_time'] = datetime.now()
 
-    def after_response(self, response: Any, **kwargs: Any) -> None:
+        Returns:
+            Обновлённые параметры запроса
+        """
+        # Сохраняем время начала запроса и другую информацию
+        kwargs['_start_time'] = datetime.now()
+        kwargs['_method'] = method
+        kwargs['_url'] = url
+        return kwargs
+
+    def after_response(self, response: Any) -> Any:
         """
         Вызывается после получения ответа.
         Собирает метрики о запросе.
 
         Args:
             response: Объект ответа
-            **kwargs: Дополнительные параметры
+
+        Returns:
+            response: Объект ответа
         """
         with self._lock:
             # Увеличиваем счетчик запросов
             self._total_requests += 1
 
+            # Получаем информацию из request объекта
+            start_time = getattr(response.request, '_start_time', None)
+            method = getattr(response.request, '_method', response.request.method)
+            url = getattr(response.request, '_url', response.request.url)
+
             # Вычисляем время ответа
-            start_time = kwargs.get('_start_time')
             response_time = 0.0
             if start_time:
                 response_time = (datetime.now() - start_time).total_seconds()
                 self._total_response_time += response_time
-
-            # Получаем информацию о запросе
-            method = kwargs.get('method', 'GET')
-            url = kwargs.get('url', '')
             status_code = response.status_code
 
             # Обновляем статистику по методам
@@ -160,15 +170,17 @@ class MonitoringPlugin(Plugin):
             if len(self._request_history) > self._history_size:
                 self._request_history.pop(0)
 
-    # DEPRECATED: Для обратной совместимости
-    def on_request(self, **kwargs: Any) -> None:
-        """Устаревший метод. Используйте before_request."""
-        self.before_request(**kwargs)
+        return response
 
     # DEPRECATED: Для обратной совместимости
-    def on_response(self, response: Any, **kwargs: Any) -> None:
+    def on_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
+        """Устаревший метод. Используйте before_request."""
+        return self.before_request(method, url, **kwargs)
+
+    # DEPRECATED: Для обратной совместимости
+    def on_response(self, response: Any) -> Any:
         """Устаревший метод. Используйте after_response."""
-        self.after_response(response, **kwargs)
+        return self.after_response(response)
 
     def on_error(self, exception: Exception, **kwargs: Any) -> None:
         """
@@ -283,6 +295,15 @@ class MonitoringPlugin(Plugin):
             if self._total_requests > 0:
                 avg_response_time = self._total_response_time / self._total_requests
 
+            # Нормализуем метрики эндпоинтов (исправляем inf значения)
+            normalized_endpoint_metrics = {}
+            for endpoint, metrics in self._endpoint_metrics.items():
+                normalized_metrics = dict(metrics)
+                # Если min_time остался inf (не было успешных запросов), заменяем на 0
+                if normalized_metrics['min_time'] == float('inf'):
+                    normalized_metrics['min_time'] = 0
+                normalized_endpoint_metrics[endpoint] = normalized_metrics
+
             return {
                 'total_requests': self._total_requests,
                 'failed_requests': self._failed_requests,
@@ -290,7 +311,7 @@ class MonitoringPlugin(Plugin):
                 'avg_response_time': f'{avg_response_time:.3f}s',
                 'method_stats': dict(self._method_stats),
                 'status_code_stats': dict(self._status_code_stats),
-                'endpoint_metrics': dict(self._endpoint_metrics)
+                'endpoint_metrics': normalized_endpoint_metrics
             }
 
     def get_request_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -403,7 +424,7 @@ class MonitoringPlugin(Plugin):
             print(f"\n🎯 Top Endpoints:")
             sorted_endpoints = sorted(
                 metrics['endpoint_metrics'].items(),
-                key=lambda x: x[0]['count'],
+                key=lambda x: x[1]['count'],
                 reverse=True
             )[:5]
 

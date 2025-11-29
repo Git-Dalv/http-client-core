@@ -371,6 +371,9 @@ class HTTPClient:
             # Удаляем ВСЕ служебные параметры перед запросом
             cache_key = kwargs.pop('_cache_key', None)
             monitoring_request_id = kwargs.pop('_monitoring_request_id', None)  # НОВОЕ
+            start_time = kwargs.pop('_start_time', None)  # Для MonitoringPlugin
+            req_method = kwargs.pop('_method', None)  # Для MonitoringPlugin
+            req_url = kwargs.pop('_url', None)  # Для MonitoringPlugin
 
             # Выполняем запрос через сессию
             response = self._session.request(method, url, **kwargs)
@@ -380,6 +383,12 @@ class HTTPClient:
                 response.request._cache_key = cache_key
             if monitoring_request_id:  # НОВОЕ
                 response.request._monitoring_request_id = monitoring_request_id
+            if start_time:  # Для MonitoringPlugin
+                response.request._start_time = start_time
+            if req_method:  # Для MonitoringPlugin
+                response.request._method = req_method
+            if req_url:  # Для MonitoringPlugin
+                response.request._url = req_url
 
             # Проверяем статус код
             response.raise_for_status()
