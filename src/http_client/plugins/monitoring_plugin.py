@@ -283,6 +283,15 @@ class MonitoringPlugin(Plugin):
             if self._total_requests > 0:
                 avg_response_time = self._total_response_time / self._total_requests
 
+            # Нормализуем метрики эндпоинтов (исправляем inf значения)
+            normalized_endpoint_metrics = {}
+            for endpoint, metrics in self._endpoint_metrics.items():
+                normalized_metrics = dict(metrics)
+                # Если min_time остался inf (не было успешных запросов), заменяем на 0
+                if normalized_metrics['min_time'] == float('inf'):
+                    normalized_metrics['min_time'] = 0
+                normalized_endpoint_metrics[endpoint] = normalized_metrics
+
             return {
                 'total_requests': self._total_requests,
                 'failed_requests': self._failed_requests,
@@ -290,7 +299,7 @@ class MonitoringPlugin(Plugin):
                 'avg_response_time': f'{avg_response_time:.3f}s',
                 'method_stats': dict(self._method_stats),
                 'status_code_stats': dict(self._status_code_stats),
-                'endpoint_metrics': dict(self._endpoint_metrics)
+                'endpoint_metrics': normalized_endpoint_metrics
             }
 
     def get_request_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -403,7 +412,7 @@ class MonitoringPlugin(Plugin):
             print(f"\n🎯 Top Endpoints:")
             sorted_endpoints = sorted(
                 metrics['endpoint_metrics'].items(),
-                key=lambda x: x[0]['count'],
+                key=lambda x: x[1]['count'],
                 reverse=True
             )[:5]
 
