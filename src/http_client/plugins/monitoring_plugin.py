@@ -74,40 +74,50 @@ class MonitoringPlugin(Plugin):
         self._request_history: List[Dict[str, Any]] = []
         self._error_history: List[Dict[str, Any]] = []
 
-    def before_request(self, **kwargs: Any) -> None:
+    def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         """
         Вызывается перед отправкой запроса.
         Сохраняет время начала запроса.
 
         Args:
+            method: HTTP метод
+            url: URL запроса
             **kwargs: Параметры запроса
-        """
-        # Сохраняем время начала запроса
-        kwargs['_start_time'] = datetime.now()
 
-    def after_response(self, response: Any, **kwargs: Any) -> None:
+        Returns:
+            Обновлённые параметры запроса
+        """
+        # Сохраняем время начала запроса и другую информацию
+        kwargs['_start_time'] = datetime.now()
+        kwargs['_method'] = method
+        kwargs['_url'] = url
+        return kwargs
+
+    def after_response(self, response: Any) -> Any:
         """
         Вызывается после получения ответа.
         Собирает метрики о запросе.
 
         Args:
             response: Объект ответа
-            **kwargs: Дополнительные параметры
+
+        Returns:
+            response: Объект ответа
         """
         with self._lock:
             # Увеличиваем счетчик запросов
             self._total_requests += 1
 
+            # Получаем информацию из request объекта
+            start_time = getattr(response.request, '_start_time', None)
+            method = getattr(response.request, '_method', response.request.method)
+            url = getattr(response.request, '_url', response.request.url)
+
             # Вычисляем время ответа
-            start_time = kwargs.get('_start_time')
             response_time = 0.0
             if start_time:
                 response_time = (datetime.now() - start_time).total_seconds()
                 self._total_response_time += response_time
-
-            # Получаем информацию о запросе
-            method = kwargs.get('method', 'GET')
-            url = kwargs.get('url', '')
             status_code = response.status_code
 
             # Обновляем статистику по методам
@@ -160,15 +170,17 @@ class MonitoringPlugin(Plugin):
             if len(self._request_history) > self._history_size:
                 self._request_history.pop(0)
 
-    # DEPRECATED: Для обратной совместимости
-    def on_request(self, **kwargs: Any) -> None:
-        """Устаревший метод. Используйте before_request."""
-        self.before_request(**kwargs)
+        return response
 
     # DEPRECATED: Для обратной совместимости
-    def on_response(self, response: Any, **kwargs: Any) -> None:
+    def on_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
+        """Устаревший метод. Используйте before_request."""
+        return self.before_request(method, url, **kwargs)
+
+    # DEPRECATED: Для обратной совместимости
+    def on_response(self, response: Any) -> Any:
         """Устаревший метод. Используйте after_response."""
-        self.after_response(response, **kwargs)
+        return self.after_response(response)
 
     def on_error(self, exception: Exception, **kwargs: Any) -> None:
         """
