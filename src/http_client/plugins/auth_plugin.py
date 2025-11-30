@@ -1,14 +1,22 @@
 # src/http_client/plugins/auth_plugin.py
 
 from typing import Any, Dict, Optional
+
 import requests
+
 from .plugin import Plugin
+
 
 class AuthPlugin(Plugin):
     """Плагин для различных типов аутентификации"""
 
-    def __init__(self, auth_type: str = "bearer", token: Optional[str] = None,
-                 username: Optional[str] = None, password: Optional[str] = None):
+    def __init__(
+        self,
+        auth_type: str = "bearer",
+        token: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+    ):
         """
         Args:
             auth_type: Тип аутентификации ('bearer', 'basic', 'api_key')
@@ -23,18 +31,18 @@ class AuthPlugin(Plugin):
 
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         """Добавляет заголовки аутентификации"""
-        if 'headers' not in kwargs:
-            kwargs['headers'] = {}
+        if "headers" not in kwargs:
+            kwargs["headers"] = {}
 
-        if self.auth_type == 'bearer' and self.token:
-            kwargs['headers']['Authorization'] = f"Bearer {self.token}"
+        if self.auth_type == "bearer" and self.token:
+            kwargs["headers"]["Authorization"] = f"Bearer {self.token}"
 
-        elif self.auth_type == 'api_key' and self.token:
-            kwargs['headers']['X-API-Key'] = self.token
+        elif self.auth_type == "api_key" and self.token:
+            kwargs["headers"]["X-API-Key"] = self.token
 
-        elif self.auth_type == 'basic' and self.username and self.password:
+        elif self.auth_type == "basic" and self.username and self.password:
             # requests поддерживает Basic auth через параметр auth
-            kwargs['auth'] = (self.username, self.password)
+            kwargs["auth"] = (self.username, self.password)
 
         return kwargs
 

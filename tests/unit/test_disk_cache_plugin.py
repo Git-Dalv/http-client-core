@@ -1,9 +1,11 @@
 # tests/unit/test_disk_cache_plugin.py
-import pytest
-import time
+import gc
 import os
 import shutil
-import gc
+import time
+
+import pytest
+
 from src.http_client.core.http_client import HTTPClient
 from src.http_client.plugins.disk_cache_plugin import DiskCachePlugin
 
@@ -52,17 +54,17 @@ def test_disk_cache_basic(cache_dir):
         # Первый запрос - должен пойти на сервер
         response1 = client.get("/posts/1")
         assert response1.status_code == 200
-        assert response1.headers.get('X-Cache') == 'MISS'
+        assert response1.headers.get("X-Cache") == "MISS"
 
         # Второй запрос - должен быть из кэша
         response2 = client.get("/posts/1")
         assert response2.status_code == 200
-        assert response2.headers.get('X-Cache') == 'HIT'
+        assert response2.headers.get("X-Cache") == "HIT"
 
         # Проверяем статистику
         stats = plugin.get_stats()
-        assert stats['hits'] == 1
-        assert stats['misses'] == 1
+        assert stats["hits"] == 1
+        assert stats["misses"] == 1
     finally:
         client.close()
         plugin.close()
@@ -93,7 +95,7 @@ def test_disk_cache_persistence(cache_dir):
     try:
         response2 = client2.get("/posts/1")
         assert response2.status_code == 200
-        assert response2.headers.get('X-Cache') == 'HIT'
+        assert response2.headers.get("X-Cache") == "HIT"
     finally:
         client2.close()
         plugin2.close()
@@ -117,7 +119,7 @@ def test_disk_cache_ttl_expiration(cache_dir):
         # Запрос после истечения TTL - должен пойти на сервер
         response2 = client.get("/posts/1")
         assert response2.status_code == 200
-        assert response2.headers.get('X-Cache') == 'MISS'
+        assert response2.headers.get("X-Cache") == "MISS"
     finally:
         client.close()
         plugin.close()
@@ -139,11 +141,11 @@ def test_disk_cache_different_params(cache_dir):
         assert response1.status_code == 200
         assert response2.status_code == 200
         assert response3.status_code == 200
-        assert response3.headers.get('X-Cache') == 'HIT'
+        assert response3.headers.get("X-Cache") == "HIT"
 
         stats = plugin.get_stats()
-        assert stats['hits'] == 1
-        assert stats['misses'] == 2
+        assert stats["hits"] == 1
+        assert stats["misses"] == 2
     finally:
         client.close()
         plugin.close()
@@ -166,7 +168,7 @@ def test_disk_cache_post_not_cached(cache_dir):
         assert response2.status_code == 201
 
         stats = plugin.get_stats()
-        assert stats['hits'] == 0
+        assert stats["hits"] == 0
     finally:
         client.close()
         plugin.close()
@@ -174,11 +176,7 @@ def test_disk_cache_post_not_cached(cache_dir):
 
 def test_disk_cache_custom_methods(cache_dir):
     """Тест кэширования кастомных HTTP методов"""
-    plugin = DiskCachePlugin(
-        cache_dir=cache_dir,
-        ttl=60,
-        cache_methods=("GET", "POST")
-    )
+    plugin = DiskCachePlugin(cache_dir=cache_dir, ttl=60, cache_methods=("GET", "POST"))
 
     client = HTTPClient(base_url="https://jsonplaceholder.typicode.com")
     client.add_plugin(plugin)
@@ -213,16 +211,16 @@ def test_disk_cache_clear(cache_dir):
 
         # Проверяем что кэш есть
         stats1 = plugin.get_stats()
-        assert stats1['cache_size'] > 0
+        assert stats1["cache_size"] > 0
 
         # Очищаем кэш
         plugin.clear()
 
         # Проверяем что кэш пуст
         stats2 = plugin.get_stats()
-        assert stats2['cache_size'] == 0
-        assert stats2['hits'] == 0
-        assert stats2['misses'] == 0
+        assert stats2["cache_size"] == 0
+        assert stats2["hits"] == 0
+        assert stats2["misses"] == 0
     finally:
         client.close()
         plugin.close()
@@ -250,8 +248,8 @@ def test_disk_cache_delete_specific(cache_dir):
         response3 = client.get("/posts/1")
         response4 = client.get("/posts/2")
 
-        assert response3.headers.get('X-Cache') == 'MISS'
-        assert response4.headers.get('X-Cache') == 'HIT'
+        assert response3.headers.get("X-Cache") == "MISS"
+        assert response4.headers.get("X-Cache") == "HIT"
     finally:
         client.close()
         plugin.close()
@@ -261,9 +259,7 @@ def test_disk_cache_size_limit(cache_dir):
     """Тест ограничения размера кэша"""
     # Устанавливаем маленький лимит
     plugin = DiskCachePlugin(
-        cache_dir=cache_dir,
-        ttl=60,
-        size_limit=1024 * 100  # 100 KB (увеличено для стабильности)
+        cache_dir=cache_dir, ttl=60, size_limit=1024 * 100  # 100 KB (увеличено для стабильности)
     )
 
     client = HTTPClient(base_url="https://jsonplaceholder.typicode.com")
@@ -300,11 +296,11 @@ def test_disk_cache_stats(cache_dir):
 
         stats = plugin.get_stats()
 
-        assert stats['hits'] == 2
-        assert stats['misses'] == 2
-        assert stats['sets'] == 2
-        assert 'hit_rate' in stats
-        assert stats['cache_size'] == 2
+        assert stats["hits"] == 2
+        assert stats["misses"] == 2
+        assert stats["sets"] == 2
+        assert "hit_rate" in stats
+        assert stats["cache_size"] == 2
     finally:
         client.close()
         plugin.close()

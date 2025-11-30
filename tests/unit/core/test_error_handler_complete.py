@@ -2,19 +2,21 @@
 Comprehensive tests for ErrorHandler.
 """
 
-import pytest
 from unittest.mock import Mock
+
+import pytest
 import requests
+
 from src.http_client.core.error_handler import ErrorHandler
 from src.http_client.core.exceptions import (
-    ConnectionError,
-    TimeoutError,
-    NotFoundError,
     BadRequestError,
-    UnauthorizedError,
+    ConnectionError,
     ForbiddenError,
+    HTTPClientException,
+    NotFoundError,
     ServerError,
-    HTTPClientException
+    TimeoutError,
+    UnauthorizedError,
 )
 
 

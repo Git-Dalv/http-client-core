@@ -1,7 +1,8 @@
 # tests/unit/test_rate_limit_debug.py
 
+
 from src.http_client.plugins.rate_limit_plugin import RateLimitPlugin
-import pytest
+
 
 def test_rate_limit_plugin_creation():
     """Тест создания плагина"""

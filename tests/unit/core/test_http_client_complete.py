@@ -3,19 +3,20 @@ Comprehensive tests for HTTPClient with full coverage.
 Uses mocked HTTP responses to avoid network dependencies.
 """
 
+from typing import Any, Dict
+
 import pytest
+import requests as requests_lib
 import responses
-from unittest.mock import Mock, patch
-from src.http_client.core.http_client import HTTPClient
+
 from src.http_client.core.exceptions import (
     ConnectionError,
-    TimeoutError,
+    HTTPClientException,
     NotFoundError,
-    HTTPClientException
+    TimeoutError,
 )
+from src.http_client.core.http_client import HTTPClient
 from src.http_client.plugins.plugin import Plugin
-from typing import Dict, Any
-import requests as requests_lib
 
 
 class TestHTTPClientInitialization:
@@ -41,7 +42,7 @@ class TestHTTPClientInitialization:
 
     def test_init_with_default_timeout(self):
         """Test initialization with default timeout."""
-        client = HTTPClient()
+        client = HTTPClient(timeout=30)
         assert client.timeout == 30  # Default timeout
         client.close()
 
@@ -78,10 +79,7 @@ class TestHTTPClientContextManager:
     def test_context_manager_with_request(self):
         """Test context manager with actual request."""
         responses.add(
-            responses.GET,
-            "https://api.example.com/test",
-            json={"result": "ok"},
-            status=200
+            responses.GET, "https://api.example.com/test", json={"result": "ok"}, status=200
         )
 
         with HTTPClient(base_url="https://api.example.com") as client:
@@ -106,10 +104,7 @@ class TestHTTPClientBasicRequests:
     def test_get_request(self, client):
         """Test GET request."""
         responses.add(
-            responses.GET,
-            "https://api.example.com/users",
-            json={"users": []},
-            status=200
+            responses.GET, "https://api.example.com/users", json={"users": []}, status=200
         )
 
         response = client.get("/users")
@@ -123,7 +118,7 @@ class TestHTTPClientBasicRequests:
             responses.POST,
             "https://api.example.com/users",
             json={"id": 1, "name": "John"},
-            status=201
+            status=201,
         )
 
         response = client.post("/users", json={"name": "John"})
@@ -137,7 +132,7 @@ class TestHTTPClientBasicRequests:
             responses.PUT,
             "https://api.example.com/users/1",
             json={"id": 1, "name": "Jane"},
-            status=200
+            status=200,
         )
 
         response = client.put("/users/1", json={"name": "Jane"})
@@ -150,7 +145,7 @@ class TestHTTPClientBasicRequests:
             responses.PATCH,
             "https://api.example.com/users/1",
             json={"id": 1, "email": "new@example.com"},
-            status=200
+            status=200,
         )
 
         response = client.patch("/users/1", json={"email": "new@example.com"})
@@ -159,11 +154,7 @@ class TestHTTPClientBasicRequests:
     @responses.activate
     def test_delete_request(self, client):
         """Test DELETE request."""
-        responses.add(
-            responses.DELETE,
-            "https://api.example.com/users/1",
-            status=204
-        )
+        responses.add(responses.DELETE, "https://api.example.com/users/1", status=204)
 
         response = client.delete("/users/1")
         assert response.status_code == 204
@@ -171,11 +162,7 @@ class TestHTTPClientBasicRequests:
     @responses.activate
     def test_head_request(self, client):
         """Test HEAD request."""
-        responses.add(
-            responses.HEAD,
-            "https://api.example.com/users",
-            status=200
-        )
+        responses.add(responses.HEAD, "https://api.example.com/users", status=200)
 
         response = client.head("/users")
         assert response.status_code == 200
@@ -187,7 +174,7 @@ class TestHTTPClientBasicRequests:
             responses.OPTIONS,
             "https://api.example.com/users",
             headers={"Allow": "GET, POST, OPTIONS"},
-            status=200
+            status=200,
         )
 
         response = client.options("/users")
@@ -200,12 +187,7 @@ class TestHTTPClientURLHandling:
     @responses.activate
     def test_relative_url_with_base_url(self, client):
         """Test relative URL with base URL."""
-        responses.add(
-            responses.GET,
-            "https://api.example.com/posts/1",
-            json={"id": 1},
-            status=200
-        )
+        responses.add(responses.GET, "https://api.example.com/posts/1", json={"id": 1}, status=200)
 
         response = client.get("/posts/1")
         assert response.status_code == 200
@@ -214,10 +196,7 @@ class TestHTTPClientURLHandling:
     def test_absolute_url_overrides_base(self, client):
         """Test that absolute URL overrides base URL."""
         responses.add(
-            responses.GET,
-            "https://other.example.com/data",
-            json={"result": "ok"},
-            status=200
+            responses.GET, "https://other.example.com/data", json={"result": "ok"}, status=200
         )
 
         response = client.get("https://other.example.com/data")
@@ -226,12 +205,7 @@ class TestHTTPClientURLHandling:
     @responses.activate
     def test_url_without_base_url(self, client_no_base):
         """Test absolute URL without base URL."""
-        responses.add(
-            responses.GET,
-            "https://api.example.com/test",
-            json={"ok": True},
-            status=200
-        )
+        responses.add(responses.GET, "https://api.example.com/test", json={"ok": True}, status=200)
 
         response = client_no_base.get("https://api.example.com/test")
         assert response.status_code == 200
@@ -243,7 +217,7 @@ class TestHTTPClientURLHandling:
             responses.GET,
             "https://api.example.com/users?page=1&limit=10",
             json={"users": []},
-            status=200
+            status=200,
         )
 
         response = client.get("/users", params={"page": 1, "limit": 10})
@@ -256,11 +230,7 @@ class TestHTTPClientErrorHandling:
     @responses.activate
     def test_404_not_found_error(self, client):
         """Test 404 Not Found error handling."""
-        responses.add(
-            responses.GET,
-            "https://api.example.com/nonexistent",
-            status=404
-        )
+        responses.add(responses.GET, "https://api.example.com/nonexistent", status=404)
 
         with pytest.raises(NotFoundError):
             client.get("/nonexistent")
@@ -268,11 +238,7 @@ class TestHTTPClientErrorHandling:
     @responses.activate
     def test_500_server_error(self, client):
         """Test 500 Server Error handling."""
-        responses.add(
-            responses.GET,
-            "https://api.example.com/error",
-            status=500
-        )
+        responses.add(responses.GET, "https://api.example.com/error", status=500)
 
         with pytest.raises(HTTPClientException):
             client.get("/error")
@@ -286,9 +252,7 @@ class TestHTTPClientErrorHandling:
     def test_timeout_error(self, client):
         """Test timeout error handling."""
         responses.add(
-            responses.GET,
-            "https://api.example.com/slow",
-            body=requests_lib.exceptions.Timeout()
+            responses.GET, "https://api.example.com/slow", body=requests_lib.exceptions.Timeout()
         )
 
         with pytest.raises(TimeoutError):
@@ -317,12 +281,7 @@ class TestHTTPClientPlugins:
         plugin = MockPlugin()
         client.add_plugin(plugin)
 
-        responses.add(
-            responses.GET,
-            "https://api.example.com/test",
-            json={"ok": True},
-            status=200
-        )
+        responses.add(responses.GET, "https://api.example.com/test", json={"ok": True}, status=200)
 
         client.get("/test")
         assert plugin.before_request_called
@@ -333,12 +292,7 @@ class TestHTTPClientPlugins:
         plugin = MockPlugin()
         client.add_plugin(plugin)
 
-        responses.add(
-            responses.GET,
-            "https://api.example.com/test",
-            json={"ok": True},
-            status=200
-        )
+        responses.add(responses.GET, "https://api.example.com/test", json={"ok": True}, status=200)
 
         client.get("/test")
         assert plugin.after_response_called
@@ -349,11 +303,7 @@ class TestHTTPClientPlugins:
         plugin = MockPlugin()
         client.add_plugin(plugin)
 
-        responses.add(
-            responses.GET,
-            "https://api.example.com/error",
-            status=404
-        )
+        responses.add(responses.GET, "https://api.example.com/error", status=404)
 
         with pytest.raises(NotFoundError):
             client.get("/error")
@@ -402,6 +352,7 @@ class TestHTTPClientClose:
 
 
 # Helper classes for testing
+
 
 class MockPlugin(Plugin):
     """Mock plugin for testing."""

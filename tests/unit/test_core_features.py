@@ -1,6 +1,7 @@
 # tests/unit/test_core_features.py
+
 import pytest
-import time
+
 from src.http_client.core.http_client import HTTPClient
 from src.http_client.plugins.logging_plugin import LoggingPlugin
 
@@ -8,14 +9,12 @@ from src.http_client.plugins.logging_plugin import LoggingPlugin
 def test_connection_pooling():
     """Тест настройки connection pooling"""
     client = HTTPClient(
-        base_url="https://jsonplaceholder.typicode.com",
-        pool_connections=5,
-        pool_maxsize=20
+        base_url="https://jsonplaceholder.typicode.com", pool_connections=5, pool_maxsize=20
     )
 
     # Проверяем, что адаптеры установлены
-    assert 'https://' in client.session.adapters
-    assert 'http://' in client.session.adapters
+    assert "https://" in client.session.adapters
+    assert "http://" in client.session.adapters
 
     # Делаем несколько запросов для проверки переиспользования соединений
     for i in range(5):
@@ -40,7 +39,7 @@ def test_cookie_management():
     # Делаем запрос и проверяем, что кука отправлена
     response = client.get("/cookies")
     assert response.status_code == 200
-    response_cookies = response.json().get('cookies', {})
+    response_cookies = response.json().get("cookies", {})
     assert "test_cookie" in response_cookies
 
     # Устанавливаем куку с конкретным доменом
@@ -91,21 +90,15 @@ def test_proxy_support():
     # Примечание: этот тест не использует реальный прокси
     # Проверяем только установку и получение прокси
 
-    proxies = {
-        'http': 'http://proxy.example.com:8080',
-        'https': 'https://proxy.example.com:8080'
-    }
+    proxies = {"http": "http://proxy.example.com:8080", "https": "https://proxy.example.com:8080"}
 
-    client = HTTPClient(
-        base_url="https://jsonplaceholder.typicode.com",
-        proxies=proxies
-    )
+    client = HTTPClient(base_url="https://jsonplaceholder.typicode.com", proxies=proxies)
 
     # Проверяем, что прокси установлены
     assert client.get_proxies() == proxies
 
     # Изменяем прокси
-    new_proxies = {'http': 'http://newproxy.example.com:8080'}
+    new_proxies = {"http": "http://newproxy.example.com:8080"}
     client.set_proxies(new_proxies)
     assert client.get_proxies() == new_proxies
 
@@ -149,8 +142,7 @@ def test_immutability():
 def test_header_management():
     """Тест управления заголовками"""
     client = HTTPClient(
-        base_url="https://httpbin.org",
-        headers={"X-Custom-Header": "initial_value"}
+        base_url="https://httpbin.org", headers={"X-Custom-Header": "initial_value"}
     )
 
     # Проверяем начальный заголовок
@@ -164,9 +156,9 @@ def test_header_management():
     # Делаем запрос и проверяем заголовки
     response = client.get("/headers")
     assert response.status_code == 200
-    response_headers = response.json()['headers']
-    assert 'X-Custom-Header' in response_headers
-    assert 'X-Another-Header' in response_headers
+    response_headers = response.json()["headers"]
+    assert "X-Custom-Header" in response_headers
+    assert "X-Another-Header" in response_headers
 
     # Удаляем заголовок
     client.remove_header("X-Custom-Header")
@@ -201,12 +193,10 @@ def test_ssl_verification():
 
     # Без проверки SSL
     import warnings
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        client2 = HTTPClient(
-            base_url="https://jsonplaceholder.typicode.com",
-            verify_ssl=False
-        )
+        client2 = HTTPClient(base_url="https://jsonplaceholder.typicode.com", verify_ssl=False)
         response2 = client2.get("/posts/1")
         assert response2.status_code == 200
         client2.close()
@@ -214,10 +204,7 @@ def test_ssl_verification():
 
 def test_timeout_override():
     """Тест переопределения таймаута в конкретном запросе"""
-    client = HTTPClient(
-        base_url="https://httpbin.org",
-        timeout=10
-    )
+    client = HTTPClient(base_url="https://httpbin.org", timeout=10)
 
     # Запрос с дефолтным таймаутом
     response1 = client.get("/delay/1")
@@ -232,10 +219,7 @@ def test_timeout_override():
 
 def test_multiple_plugins_with_new_features():
     """Тест работы плагинов с новыми возможностями"""
-    client = HTTPClient(
-        base_url="https://jsonplaceholder.typicode.com",
-        pool_connections=5
-    )
+    client = HTTPClient(base_url="https://jsonplaceholder.typicode.com", pool_connections=5)
 
     # Добавляем плагин
     client.add_plugin(LoggingPlugin())
@@ -290,13 +274,13 @@ def test_session_persistence():
     # Делаем первый запрос
     response1 = client.get("/cookies")
     assert response1.status_code == 200
-    cookies1 = response1.json().get('cookies', {})
+    cookies1 = response1.json().get("cookies", {})
     assert "persistent_cookie" in cookies1
 
     # Делаем второй запрос - кука должна сохраниться
     response2 = client.get("/cookies")
     assert response2.status_code == 200
-    cookies2 = response2.json().get('cookies', {})
+    cookies2 = response2.json().get("cookies", {})
     assert "persistent_cookie" in cookies2
 
     client.close()
@@ -304,13 +288,10 @@ def test_session_persistence():
 
 def test_max_redirects():
     """Тест настройки максимального количества редиректов"""
-    client = HTTPClient(
-        base_url="https://httpbin.org",
-        max_redirects=5
-    )
-
+    client = HTTPClient(base_url="https://httpbin.org", max_redirects=5)
     # Тест редиректа
     response = client.get("/redirect/3")
+
     assert response.status_code == 200
 
     client.close()
@@ -334,10 +315,7 @@ def test_base_url_property():
 def test_timeout_property():
     """Тест свойства timeout"""
     timeout = 15
-    client = HTTPClient(
-        base_url="https://jsonplaceholder.typicode.com",
-        timeout=timeout
-    )
+    client = HTTPClient(base_url="https://jsonplaceholder.typicode.com", timeout=timeout)
 
     # Проверяем, что timeout доступен через свойство
     assert client.timeout == timeout

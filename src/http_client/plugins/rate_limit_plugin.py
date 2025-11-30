@@ -3,7 +3,9 @@
 import time
 from collections import deque
 from typing import Any, Dict
+
 import requests
+
 from .plugin import Plugin
 
 

@@ -4,8 +4,9 @@ Comprehensive tests for HTTPClient - complete coverage.
 
 import pytest
 import responses
-from src.http_client.core.http_client import HTTPClient
+
 from src.http_client.core.exceptions import HTTPClientException, NotFoundError
+from src.http_client.core.http_client import HTTPClient
 from src.http_client.plugins.logging_plugin import LoggingPlugin
 
 
@@ -21,7 +22,7 @@ class TestHTTPClientInit:
     def test_client_init_with_base_url(self, base_url):
         """Test initialization with base_url."""
         client = HTTPClient(base_url=base_url)
-        assert client.base_url == base_url.rstrip('/')
+        assert client.base_url == base_url.rstrip("/")
         client.close()
 
     def test_client_init_with_trailing_slash(self):
@@ -74,12 +75,7 @@ class TestHTTPClientContextManager:
     @responses.activate
     def test_context_manager_with_request(self, base_url):
         """Test context manager with actual request."""
-        responses.add(
-            responses.GET,
-            f"{base_url}/test",
-            json={"result": "ok"},
-            status=200
-        )
+        responses.add(responses.GET, f"{base_url}/test", json={"result": "ok"}, status=200)
 
         with HTTPClient(base_url=base_url) as client:
             response = client.get("/test")
@@ -92,12 +88,7 @@ class TestHTTPClientHTTPMethods:
     @responses.activate
     def test_get_request(self, base_url):
         """Test GET request."""
-        responses.add(
-            responses.GET,
-            f"{base_url}/users",
-            json={"users": []},
-            status=200
-        )
+        responses.add(responses.GET, f"{base_url}/users", json={"users": []}, status=200)
 
         client = HTTPClient(base_url=base_url)
         response = client.get("/users")
@@ -110,10 +101,7 @@ class TestHTTPClientHTTPMethods:
     def test_post_request(self, base_url):
         """Test POST request."""
         responses.add(
-            responses.POST,
-            f"{base_url}/users",
-            json={"id": 1, "name": "John"},
-            status=201
+            responses.POST, f"{base_url}/users", json={"id": 1, "name": "John"}, status=201
         )
 
         client = HTTPClient(base_url=base_url)
@@ -127,10 +115,7 @@ class TestHTTPClientHTTPMethods:
     def test_put_request(self, base_url):
         """Test PUT request."""
         responses.add(
-            responses.PUT,
-            f"{base_url}/users/1",
-            json={"id": 1, "name": "Jane"},
-            status=200
+            responses.PUT, f"{base_url}/users/1", json={"id": 1, "name": "Jane"}, status=200
         )
 
         client = HTTPClient(base_url=base_url)
@@ -146,7 +131,7 @@ class TestHTTPClientHTTPMethods:
             responses.PATCH,
             f"{base_url}/users/1",
             json={"id": 1, "email": "new@example.com"},
-            status=200
+            status=200,
         )
 
         client = HTTPClient(base_url=base_url)
@@ -158,11 +143,7 @@ class TestHTTPClientHTTPMethods:
     @responses.activate
     def test_delete_request(self, base_url):
         """Test DELETE request."""
-        responses.add(
-            responses.DELETE,
-            f"{base_url}/users/1",
-            status=204
-        )
+        responses.add(responses.DELETE, f"{base_url}/users/1", status=204)
 
         client = HTTPClient(base_url=base_url)
         response = client.delete("/users/1")
@@ -173,11 +154,7 @@ class TestHTTPClientHTTPMethods:
     @responses.activate
     def test_head_request(self, base_url):
         """Test HEAD request."""
-        responses.add(
-            responses.HEAD,
-            f"{base_url}/users",
-            status=200
-        )
+        responses.add(responses.HEAD, f"{base_url}/users", status=200)
 
         client = HTTPClient(base_url=base_url)
         response = client.head("/users")
@@ -192,7 +169,7 @@ class TestHTTPClientHTTPMethods:
             responses.OPTIONS,
             f"{base_url}/users",
             headers={"Allow": "GET, POST, OPTIONS"},
-            status=200
+            status=200,
         )
 
         client = HTTPClient(base_url=base_url)
@@ -208,12 +185,7 @@ class TestHTTPClientURLHandling:
     @responses.activate
     def test_relative_url_with_base(self, base_url):
         """Test relative URL with base_url."""
-        responses.add(
-            responses.GET,
-            f"{base_url}/posts/1",
-            json={"id": 1},
-            status=200
-        )
+        responses.add(responses.GET, f"{base_url}/posts/1", json={"id": 1}, status=200)
 
         client = HTTPClient(base_url=base_url)
         response = client.get("/posts/1")
@@ -225,10 +197,7 @@ class TestHTTPClientURLHandling:
     def test_absolute_url_overrides_base(self, base_url):
         """Test that absolute URL overrides base_url."""
         responses.add(
-            responses.GET,
-            "https://other.example.com/data",
-            json={"result": "ok"},
-            status=200
+            responses.GET, "https://other.example.com/data", json={"result": "ok"}, status=200
         )
 
         client = HTTPClient(base_url=base_url)
@@ -241,10 +210,7 @@ class TestHTTPClientURLHandling:
     def test_url_with_query_params(self, base_url):
         """Test URL with query parameters."""
         responses.add(
-            responses.GET,
-            f"{base_url}/users?page=1&limit=10",
-            json={"users": []},
-            status=200
+            responses.GET, f"{base_url}/users?page=1&limit=10", json={"users": []}, status=200
         )
 
         client = HTTPClient(base_url=base_url)
@@ -260,11 +226,7 @@ class TestHTTPClientErrorHandling:
     @responses.activate
     def test_404_error(self, base_url):
         """Test 404 error handling."""
-        responses.add(
-            responses.GET,
-            f"{base_url}/notfound",
-            status=404
-        )
+        responses.add(responses.GET, f"{base_url}/notfound", status=404)
 
         client = HTTPClient(base_url=base_url)
 
@@ -276,11 +238,7 @@ class TestHTTPClientErrorHandling:
     @responses.activate
     def test_500_error(self, base_url):
         """Test 500 error handling."""
-        responses.add(
-            responses.GET,
-            f"{base_url}/error",
-            status=500
-        )
+        responses.add(responses.GET, f"{base_url}/error", status=500)
 
         client = HTTPClient(base_url=base_url)
 
@@ -317,12 +275,7 @@ class TestHTTPClientPlugins:
     @responses.activate
     def test_plugin_hooks_called(self, base_url):
         """Test that plugin hooks are called."""
-        responses.add(
-            responses.GET,
-            f"{base_url}/test",
-            json={"ok": True},
-            status=200
-        )
+        responses.add(responses.GET, f"{base_url}/test", json={"ok": True}, status=200)
 
         plugin = LoggingPlugin()
         client = HTTPClient(base_url=base_url)
@@ -340,7 +293,7 @@ class TestHTTPClientProperties:
     def test_base_url_property(self, base_url):
         """Test base_url property."""
         client = HTTPClient(base_url=base_url)
-        assert client.base_url == base_url.rstrip('/')
+        assert client.base_url == base_url.rstrip("/")
         client.close()
 
     def test_timeout_property(self, base_url):

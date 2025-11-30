@@ -1,11 +1,12 @@
 # tests/unit/test_advanced_plugins.py
 
-import pytest
 import time
+
 from src.http_client.core.http_client import HTTPClient
+from src.http_client.plugins.auth_plugin import AuthPlugin
 from src.http_client.plugins.cache_plugin import CachePlugin
 from src.http_client.plugins.rate_limit_plugin import RateLimitPlugin
-from src.http_client.plugins.auth_plugin import AuthPlugin
+
 
 def test_cache_plugin():
     """Тест плагина кэширования"""
@@ -29,6 +30,7 @@ def test_cache_plugin():
     # Кэшированный запрос должен быть быстрее
     print(f"First request: {first_request_time:.4f}s, Cached request: {second_request_time:.4f}s")
 
+
 def test_rate_limit_plugin():
     """Тест плагина rate limiting"""
     client = HTTPClient(base_url="https://jsonplaceholder.typicode.com")
@@ -50,6 +52,7 @@ def test_rate_limit_plugin():
     # Должна быть задержка
     print(f"4th request took {elapsed_time:.2f}s (should be ~5s)")
 
+
 def test_auth_plugin_bearer():
     """Тест плагина аутентификации (Bearer)"""
     client = HTTPClient(base_url="https://httpbin.org")
@@ -60,9 +63,10 @@ def test_auth_plugin_bearer():
     assert response.status_code == 200
 
     # Проверяем, что токен был добавлен
-    headers = response.json()['headers']
-    assert 'Authorization' in headers
-    assert headers['Authorization'] == 'Bearer test_token_123'
+    headers = response.json()["headers"]
+    assert "Authorization" in headers
+    assert headers["Authorization"] == "Bearer test_token_123"
+
 
 def test_auth_plugin_api_key():
     """Тест плагина аутентификации (API Key)"""
@@ -74,9 +78,10 @@ def test_auth_plugin_api_key():
     assert response.status_code == 200
 
     # Проверяем, что API ключ был добавлен
-    headers = response.json()['headers']
-    assert 'X-Api-Key' in headers
-    assert headers['X-Api-Key'] == 'my_api_key_456'
+    headers = response.json()["headers"]
+    assert "X-Api-Key" in headers
+    assert headers["X-Api-Key"] == "my_api_key_456"
+
 
 def test_multiple_plugins_together():
     """Тест использования нескольких плагинов вместе"""

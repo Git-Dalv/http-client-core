@@ -4,8 +4,11 @@ import hashlib
 import json
 import time
 from typing import Any, Dict, Optional
+
 import requests
+
 from .plugin import Plugin
+
 
 class CachePlugin(Plugin):
     """Плагин для кэширования HTTP ответов"""
@@ -22,10 +25,10 @@ class CachePlugin(Plugin):
         """Генерирует уникальный ключ для кэша"""
         # Создаем строку из метода, URL и параметров
         cache_data = {
-            'method': method,
-            'url': url,
-            'params': kwargs.get('params', {}),
-            'json': kwargs.get('json', {})
+            "method": method,
+            "url": url,
+            "params": kwargs.get("params", {}),
+            "json": kwargs.get("json", {}),
         }
         cache_string = json.dumps(cache_data, sort_keys=True)
         return hashlib.md5(cache_string.encode()).hexdigest()
@@ -35,7 +38,7 @@ class CachePlugin(Plugin):
         if not cache_entry:
             return False
 
-        cached_time = cache_entry.get('timestamp', 0)
+        cached_time = cache_entry.get("timestamp", 0)
         current_time = time.time()
 
         return (current_time - cached_time) < self.ttl
@@ -43,7 +46,7 @@ class CachePlugin(Plugin):
     def get_from_cache(self, method: str, url: str, **kwargs: Any) -> Optional[requests.Response]:
         """Получает ответ из кэша, если он есть и актуален"""
         # Кэшируем только GET запросы
-        if method.upper() != 'GET':
+        if method.upper() != "GET":
             return None
 
         cache_key = self._generate_cache_key(method, url, **kwargs)
@@ -51,7 +54,7 @@ class CachePlugin(Plugin):
 
         if self._is_cache_valid(cache_entry):
             print(f"Cache HIT for {url}")
-            return cache_entry['response']
+            return cache_entry["response"]
 
         print(f"Cache MISS for {url}")
         return None
@@ -59,14 +62,11 @@ class CachePlugin(Plugin):
     def save_to_cache(self, method: str, url: str, response: requests.Response, **kwargs: Any):
         """Сохраняет ответ в кэш"""
         # Кэшируем только GET запросы с успешным статусом
-        if method.upper() != 'GET' or response.status_code != 200:
+        if method.upper() != "GET" or response.status_code != 200:
             return
 
         cache_key = self._generate_cache_key(method, url, **kwargs)
-        self.cache[cache_key] = {
-            'response': response,
-            'timestamp': time.time()
-        }
+        self.cache[cache_key] = {"response": response, "timestamp": time.time()}
 
     def clear_cache(self):
         """Очищает весь кэш"""
@@ -76,17 +76,17 @@ class CachePlugin(Plugin):
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         """Проверяет кэш перед запросом"""
         # Сохраняем параметры для использования в after_response
-        self._last_request = {'method': method, 'url': url, 'kwargs': kwargs}
+        self._last_request = {"method": method, "url": url, "kwargs": kwargs}
         return kwargs
 
     def after_response(self, response: requests.Response) -> requests.Response:
         """Сохраняет ответ в кэш"""
-        if hasattr(self, '_last_request'):
+        if hasattr(self, "_last_request"):
             self.save_to_cache(
-                self._last_request['method'],
-                self._last_request['url'],
+                self._last_request["method"],
+                self._last_request["url"],
                 response,
-                **self._last_request['kwargs']
+                **self._last_request["kwargs"],
             )
         return response
 

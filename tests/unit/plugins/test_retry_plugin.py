@@ -2,12 +2,12 @@
 Comprehensive tests for RetryPlugin - complete coverage.
 """
 
-import pytest
-import time
 from unittest.mock import Mock, patch
+
 import requests
-from src.http_client.plugins.retry_plugin import RetryPlugin
+
 from src.http_client.core.exceptions import HTTPClientException
+from src.http_client.plugins.retry_plugin import RetryPlugin
 
 
 class TestRetryPluginInit:
@@ -62,9 +62,9 @@ class TestRetryPluginBeforeRequest:
 
         assert result == kwargs
         assert plugin.last_request == {
-            'method': 'GET',
-            'url': 'https://api.example.com/test',
-            'kwargs': kwargs
+            "method": "GET",
+            "url": "https://api.example.com/test",
+            "kwargs": kwargs,
         }
 
     def test_before_request_with_empty_kwargs(self):
@@ -74,9 +74,9 @@ class TestRetryPluginBeforeRequest:
         result = plugin.before_request("POST", "https://api.example.com/data")
 
         assert result == {}
-        assert plugin.last_request['method'] == 'POST'
-        assert plugin.last_request['url'] == 'https://api.example.com/data'
-        assert plugin.last_request['kwargs'] == {}
+        assert plugin.last_request["method"] == "POST"
+        assert plugin.last_request["url"] == "https://api.example.com/data"
+        assert plugin.last_request["kwargs"] == {}
 
     def test_before_request_with_json_data(self):
         """Test before_request with JSON data."""
@@ -86,7 +86,7 @@ class TestRetryPluginBeforeRequest:
         result = plugin.before_request("POST", "https://api.example.com/users", **kwargs)
 
         assert result == kwargs
-        assert plugin.last_request['kwargs']['json'] == {"name": "test"}
+        assert plugin.last_request["kwargs"]["json"] == {"name": "test"}
 
     def test_before_request_overwrites_previous(self):
         """Test that before_request overwrites previous saved request."""
@@ -95,8 +95,8 @@ class TestRetryPluginBeforeRequest:
         plugin.before_request("GET", "https://api.example.com/first")
         plugin.before_request("POST", "https://api.example.com/second", json={"data": "test"})
 
-        assert plugin.last_request['method'] == 'POST'
-        assert plugin.last_request['url'] == 'https://api.example.com/second'
+        assert plugin.last_request["method"] == "POST"
+        assert plugin.last_request["url"] == "https://api.example.com/second"
 
 
 class TestRetryPluginAfterResponse:
@@ -145,7 +145,7 @@ class TestRetryPluginAfterResponse:
 class TestRetryPluginOnError:
     """Test on_error hook and retry logic."""
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_on_error_increments_retry_count(self, mock_sleep):
         """Test that on_error increments retry_count."""
         plugin = RetryPlugin()
@@ -155,7 +155,7 @@ class TestRetryPluginOnError:
 
         assert plugin.retry_count == 1
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_on_error_calculates_backoff_correctly(self, mock_sleep):
         """Test exponential backoff calculation."""
         plugin = RetryPlugin(backoff_factor=1.0)
@@ -173,7 +173,7 @@ class TestRetryPluginOnError:
         plugin.on_error(error)
         mock_sleep.assert_called_with(4.0)
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_on_error_with_custom_backoff_factor(self, mock_sleep):
         """Test backoff with custom backoff_factor."""
         plugin = RetryPlugin(backoff_factor=0.5)
@@ -187,7 +187,7 @@ class TestRetryPluginOnError:
         plugin.on_error(error)
         mock_sleep.assert_called_with(1.0)
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_on_error_max_retries_reached(self, mock_sleep):
         """Test behavior when max retries is reached."""
         plugin = RetryPlugin(max_retries=2)
@@ -205,7 +205,7 @@ class TestRetryPluginOnError:
         plugin.on_error(error)
         assert plugin.retry_count == 0  # Reset after max retries
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_on_error_resets_after_max_retries(self, mock_sleep):
         """Test that retry_count resets after exceeding max_retries."""
         plugin = RetryPlugin(max_retries=1)
@@ -217,8 +217,8 @@ class TestRetryPluginOnError:
         plugin.on_error(error)  # retry_count = 2, exceeds max_retries, resets
         assert plugin.retry_count == 0
 
-    @patch('time.sleep')
-    @patch('builtins.print')
+    @patch("time.sleep")
+    @patch("builtins.print")
     def test_on_error_prints_retry_message(self, mock_print, mock_sleep):
         """Test that on_error prints retry messages."""
         plugin = RetryPlugin(max_retries=3, backoff_factor=1.0)
@@ -229,8 +229,8 @@ class TestRetryPluginOnError:
         # Should print "Retry 1/3 after 1.0s..."
         mock_print.assert_called_with("Retry 1/3 after 1.0s...")
 
-    @patch('time.sleep')
-    @patch('builtins.print')
+    @patch("time.sleep")
+    @patch("builtins.print")
     def test_on_error_prints_max_retries_message(self, mock_print, mock_sleep):
         """Test that on_error prints max retries message."""
         plugin = RetryPlugin(max_retries=1)
@@ -242,7 +242,7 @@ class TestRetryPluginOnError:
         # Should print "Max retries (1) reached. Giving up."
         mock_print.assert_called_with("Max retries (1) reached. Giving up.")
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_on_error_with_zero_backoff(self, mock_sleep):
         """Test that zero backoff doesn't sleep."""
         plugin = RetryPlugin(backoff_factor=0.0)
@@ -252,7 +252,7 @@ class TestRetryPluginOnError:
 
         mock_sleep.assert_called_with(0.0)
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_on_error_with_different_exception_types(self, mock_sleep):
         """Test on_error with different exception types."""
         plugin = RetryPlugin()
@@ -275,7 +275,7 @@ class TestRetryPluginOnError:
 class TestRetryPluginRetryFlow:
     """Test complete retry flow scenarios."""
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_successful_request_after_error(self, mock_sleep):
         """Test that retry_count resets after successful request following errors."""
         plugin = RetryPlugin()
@@ -291,7 +291,7 @@ class TestRetryPluginRetryFlow:
         plugin.after_response(response)
         assert plugin.retry_count == 0
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_multiple_error_cycles(self, mock_sleep):
         """Test multiple cycles of errors and successes."""
         plugin = RetryPlugin(max_retries=2)
@@ -311,7 +311,7 @@ class TestRetryPluginRetryFlow:
         plugin.after_response(response)
         assert plugin.retry_count == 0
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_last_request_persistence(self, mock_sleep):
         """Test that last_request persists through retries."""
         plugin = RetryPlugin()
@@ -326,9 +326,9 @@ class TestRetryPluginRetryFlow:
         plugin.on_error(error)
 
         # Verify last_request is still saved
-        assert plugin.last_request['method'] == 'GET'
-        assert plugin.last_request['url'] == 'https://api.example.com/test'
-        assert plugin.last_request['kwargs'] == kwargs
+        assert plugin.last_request["method"] == "GET"
+        assert plugin.last_request["url"] == "https://api.example.com/test"
+        assert plugin.last_request["kwargs"] == kwargs
 
 
 class TestRetryPluginEdgeCases:
@@ -346,7 +346,7 @@ class TestRetryPluginEdgeCases:
 
         assert plugin.retry_count == 0
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_very_large_max_retries(self, mock_sleep):
         """Test with very large max_retries value."""
         plugin = RetryPlugin(max_retries=1000)
@@ -357,7 +357,7 @@ class TestRetryPluginEdgeCases:
 
         assert plugin.retry_count == 5
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_very_large_backoff_factor(self, mock_sleep):
         """Test with very large backoff_factor."""
         plugin = RetryPlugin(backoff_factor=100.0)
@@ -368,7 +368,7 @@ class TestRetryPluginEdgeCases:
         # Should sleep for 100.0 * 2^0 = 100.0
         mock_sleep.assert_called_with(100.0)
 
-    @patch('time.sleep')
+    @patch("time.sleep")
     def test_backoff_growth_rate(self, mock_sleep):
         """Test that backoff time grows exponentially."""
         plugin = RetryPlugin(backoff_factor=1.0, max_retries=10)

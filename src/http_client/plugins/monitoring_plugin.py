@@ -1,9 +1,9 @@
 # src/http_client/plugins/monitoring_plugin.py
 
 import threading
-from typing import Any, Dict, List, Optional
 from datetime import datetime
-from collections import defaultdict
+from typing import Any, Dict, List, Optional
+
 from .plugin import Plugin
 
 
@@ -39,11 +39,7 @@ class MonitoringPlugin(Plugin):
         >>> monitoring.print_summary()
     """
 
-    def __init__(
-            self,
-            history_size: int = 100,
-            track_errors: bool = True
-    ):
+    def __init__(self, history_size: int = 100, track_errors: bool = True):
         """
         Инициализация плагина мониторинга.
 
@@ -88,9 +84,9 @@ class MonitoringPlugin(Plugin):
             Обновлённые параметры запроса
         """
         # Сохраняем время начала запроса и другую информацию
-        kwargs['_start_time'] = datetime.now()
-        kwargs['_method'] = method
-        kwargs['_url'] = url
+        kwargs["_start_time"] = datetime.now()
+        kwargs["_method"] = method
+        kwargs["_url"] = url
         return kwargs
 
     def after_response(self, response: Any) -> Any:
@@ -109,9 +105,9 @@ class MonitoringPlugin(Plugin):
             self._total_requests += 1
 
             # Получаем информацию из request объекта
-            start_time = getattr(response.request, '_start_time', None)
-            method = getattr(response.request, '_method', response.request.method)
-            url = getattr(response.request, '_url', response.request.url)
+            start_time = getattr(response.request, "_start_time", None)
+            method = getattr(response.request, "_method", response.request.method)
+            url = getattr(response.request, "_url", response.request.url)
 
             # Вычисляем время ответа
             response_time = 0.0
@@ -137,32 +133,32 @@ class MonitoringPlugin(Plugin):
             # Обновляем метрики эндпоинта
             if endpoint not in self._endpoint_metrics:
                 self._endpoint_metrics[endpoint] = {
-                    'count': 0,
-                    'total_time': 0,
-                    'avg_time': 0,
-                    'min_time': float('inf'),
-                    'max_time': 0,
-                    'errors': 0
+                    "count": 0,
+                    "total_time": 0,
+                    "avg_time": 0,
+                    "min_time": float("inf"),
+                    "max_time": 0,
+                    "errors": 0,
                 }
 
             metrics = self._endpoint_metrics[endpoint]
-            metrics['count'] += 1
-            metrics['total_time'] += response_time
-            metrics['avg_time'] = metrics['total_time'] / metrics['count']
-            metrics['min_time'] = min(metrics['min_time'], response_time)
-            metrics['max_time'] = max(metrics['max_time'], response_time)
+            metrics["count"] += 1
+            metrics["total_time"] += response_time
+            metrics["avg_time"] = metrics["total_time"] / metrics["count"]
+            metrics["min_time"] = min(metrics["min_time"], response_time)
+            metrics["max_time"] = max(metrics["max_time"], response_time)
 
             if not is_success:
-                metrics['errors'] += 1
+                metrics["errors"] += 1
 
             # Добавляем в историю запросов
             request_info = {
-                'timestamp': datetime.now().isoformat(),
-                'method': method,
-                'url': url,
-                'status_code': status_code,
-                'response_time': response_time,
-                'success': is_success
+                "timestamp": datetime.now().isoformat(),
+                "method": method,
+                "url": url,
+                "status_code": status_code,
+                "response_time": response_time,
+                "success": is_success,
             }
             self._request_history.append(request_info)
 
@@ -195,17 +191,19 @@ class MonitoringPlugin(Plugin):
             self._failed_requests += 1
 
             # Извлекаем информацию о запросе
-            method = kwargs.get('method', 'UNKNOWN')
-            url = kwargs.get('url', 'UNKNOWN')
+            method = kwargs.get("method", "UNKNOWN")
+            url = kwargs.get("url", "UNKNOWN")
 
             # Обновляем статистику по методам
             self._method_stats[method] = self._method_stats.get(method, 0) + 1
 
             # Получаем статус код из исключения если есть
             status_code = None
-            if hasattr(exception, 'response') and exception.response is not None:
+            if hasattr(exception, "response") and exception.response is not None:
                 status_code = exception.response.status_code
-                self._status_code_stats[status_code] = self._status_code_stats.get(status_code, 0) + 1
+                self._status_code_stats[status_code] = (
+                    self._status_code_stats.get(status_code, 0) + 1
+                )
 
             # Извлекаем endpoint из URL
             endpoint = self._extract_endpoint(url)
@@ -213,26 +211,26 @@ class MonitoringPlugin(Plugin):
             # Обновляем метрики эндпоинта
             if endpoint not in self._endpoint_metrics:
                 self._endpoint_metrics[endpoint] = {
-                    'count': 0,
-                    'total_time': 0,
-                    'avg_time': 0,
-                    'min_time': float('inf'),
-                    'max_time': 0,
-                    'errors': 0
+                    "count": 0,
+                    "total_time": 0,
+                    "avg_time": 0,
+                    "min_time": float("inf"),
+                    "max_time": 0,
+                    "errors": 0,
                 }
 
-            self._endpoint_metrics[endpoint]['count'] += 1
-            self._endpoint_metrics[endpoint]['errors'] += 1
+            self._endpoint_metrics[endpoint]["count"] += 1
+            self._endpoint_metrics[endpoint]["errors"] += 1
 
             # Добавляем в историю ошибок
             if self._track_errors:
                 error_info = {
-                    'timestamp': datetime.now().isoformat(),
-                    'method': method,
-                    'url': url,
-                    'error_type': type(exception).__name__,
-                    'error_message': str(exception),
-                    'status_code': status_code
+                    "timestamp": datetime.now().isoformat(),
+                    "method": method,
+                    "url": url,
+                    "error_type": type(exception).__name__,
+                    "error_message": str(exception),
+                    "status_code": status_code,
                 }
                 self._error_history.append(error_info)
 
@@ -242,12 +240,12 @@ class MonitoringPlugin(Plugin):
 
             # Добавляем в общую историю запросов
             request_info = {
-                'timestamp': datetime.now().isoformat(),
-                'method': method,
-                'url': url,
-                'status_code': status_code,
-                'response_time': 0,  # Неизвестно для ошибочных запросов
-                'success': False
+                "timestamp": datetime.now().isoformat(),
+                "method": method,
+                "url": url,
+                "status_code": status_code,
+                "response_time": 0,  # Неизвестно для ошибочных запросов
+                "success": False,
             }
             self._request_history.append(request_info)
 
@@ -267,8 +265,9 @@ class MonitoringPlugin(Plugin):
         """
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(url)
-            return parsed.path or '/'
+            return parsed.path or "/"
         except Exception:
             return url
 
@@ -289,7 +288,9 @@ class MonitoringPlugin(Plugin):
         with self._lock:
             success_rate = 0.0
             if self._total_requests > 0:
-                success_rate = ((self._total_requests - self._failed_requests) / self._total_requests) * 100
+                success_rate = (
+                    (self._total_requests - self._failed_requests) / self._total_requests
+                ) * 100
 
             avg_response_time = 0.0
             if self._total_requests > 0:
@@ -300,18 +301,18 @@ class MonitoringPlugin(Plugin):
             for endpoint, metrics in self._endpoint_metrics.items():
                 normalized_metrics = dict(metrics)
                 # Если min_time остался inf (не было успешных запросов), заменяем на 0
-                if normalized_metrics['min_time'] == float('inf'):
-                    normalized_metrics['min_time'] = 0
+                if normalized_metrics["min_time"] == float("inf"):
+                    normalized_metrics["min_time"] = 0
                 normalized_endpoint_metrics[endpoint] = normalized_metrics
 
             return {
-                'total_requests': self._total_requests,
-                'failed_requests': self._failed_requests,
-                'success_rate': f'{success_rate:.2f}%',
-                'avg_response_time': f'{avg_response_time:.3f}s',
-                'method_stats': dict(self._method_stats),
-                'status_code_stats': dict(self._status_code_stats),
-                'endpoint_metrics': normalized_endpoint_metrics
+                "total_requests": self._total_requests,
+                "failed_requests": self._failed_requests,
+                "success_rate": f"{success_rate:.2f}%",
+                "avg_response_time": f"{avg_response_time:.3f}s",
+                "method_stats": dict(self._method_stats),
+                "status_code_stats": dict(self._status_code_stats),
+                "endpoint_metrics": normalized_endpoint_metrics,
             }
 
     def get_request_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -356,9 +357,7 @@ class MonitoringPlugin(Plugin):
         """
         with self._lock:
             sorted_requests = sorted(
-                self._request_history,
-                key=lambda x: x.get('response_time', 0),
-                reverse=True
+                self._request_history, key=lambda x: x.get("response_time", 0), reverse=True
             )
             return sorted_requests[:limit]
 
@@ -376,7 +375,7 @@ class MonitoringPlugin(Plugin):
             self._request_history.clear()
             self._error_history.clear()
 
-    def export_metrics(self, format: str = 'dict') -> Any:
+    def export_metrics(self, format: str = "dict") -> Any:
         """
         Экспортирует метрики в указанном формате.
 
@@ -388,8 +387,9 @@ class MonitoringPlugin(Plugin):
         """
         metrics = self.get_metrics()
 
-        if format == 'json':
+        if format == "json":
             import json
+
             return json.dumps(metrics, indent=2)
 
         return metrics
@@ -400,43 +400,45 @@ class MonitoringPlugin(Plugin):
         """
         metrics = self.get_metrics()
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("HTTP CLIENT MONITORING SUMMARY")
-        print("="*60)
+        print("=" * 60)
 
-        print(f"\n📊 General Statistics:")
+        print("\n📊 General Statistics:")
         print(f"  Total Requests:     {metrics['total_requests']}")
         print(f"  Failed Requests:    {metrics['failed_requests']}")
         print(f"  Success Rate:       {metrics['success_rate']}")
         print(f"  Avg Response Time:  {metrics['avg_response_time']}")
 
-        if metrics['method_stats']:
-            print(f"\n🔧 Method Statistics:")
-            for method, count in metrics['method_stats'].items():
+        if metrics["method_stats"]:
+            print("\n🔧 Method Statistics:")
+            for method, count in metrics["method_stats"].items():
                 print(f"  {method:8s}: {count}")
 
-        if metrics['status_code_stats']:
-            print(f"\n📡 Status Code Statistics:")
-            for code, count in sorted(metrics['status_code_stats'].items()):
+        if metrics["status_code_stats"]:
+            print("\n📡 Status Code Statistics:")
+            for code, count in sorted(metrics["status_code_stats"].items()):
                 print(f"  {code}: {count}")
 
-        if metrics['endpoint_metrics']:
-            print(f"\n🎯 Top Endpoints:")
+        if metrics["endpoint_metrics"]:
+            print("\n🎯 Top Endpoints:")
             sorted_endpoints = sorted(
-                metrics['endpoint_metrics'].items(),
-                key=lambda x: x[1]['count'],
-                reverse=True
+                metrics["endpoint_metrics"].items(), key=lambda x: x[1]["count"], reverse=True
             )[:5]
 
             for endpoint, stats in sorted_endpoints:
                 print(f"  {endpoint}")
-                print(f"    Requests: {stats['count']}, "
-                      f"Avg Time: {stats['avg_time']:.3f}s, "
-                      f"Errors: {stats['errors']}")
+                print(
+                    f"    Requests: {stats['count']}, "
+                    f"Avg Time: {stats['avg_time']:.3f}s, "
+                    f"Errors: {stats['errors']}"
+                )
 
-        print("\n" + "="*60 + "\n")
+        print("\n" + "=" * 60 + "\n")
 
     def __repr__(self) -> str:
         """Строковое представление плагина."""
-        return (f"MonitoringPlugin(total_requests={self._total_requests}, "
-                f"failed_requests={self._failed_requests})")
+        return (
+            f"MonitoringPlugin(total_requests={self._total_requests}, "
+            f"failed_requests={self._failed_requests})"
+        )

@@ -4,6 +4,7 @@ Pytest configuration and fixtures for http-client-core tests.
 
 import pytest
 import responses as responses_lib
+
 from src.http_client.core.http_client import HTTPClient
 
 
