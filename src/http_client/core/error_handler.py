@@ -51,6 +51,9 @@ class ErrorHandler:
     def handle_http_error(response: requests.Response) -> None:
         """Обрабатывает HTTP ошибки по статус коду"""
 
+        if response is None:
+            raise HTTPClientException("HTTP error occurred but no response object available")
+
         status_code = response.status_code
         url = str(response.url)
         message = response.text[:200] if response.text else ""

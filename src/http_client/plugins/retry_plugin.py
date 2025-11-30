@@ -26,7 +26,7 @@ class RetryPlugin(Plugin):
         self.retry_count = 0
         return response
 
-    def on_error(self, error: Exception) -> None:
+    def on_error(self, error: Exception, **kwargs) -> None:
         self.retry_count += 1
         if self.retry_count <= self.max_retries:
             wait_time = self.backoff_factor * (2 ** (self.retry_count - 1))

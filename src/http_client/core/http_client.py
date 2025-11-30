@@ -23,7 +23,7 @@ class HTTPClient:
 
     def __init__(
         self,
-        base_url: str,
+        base_url: Optional[str] = None,
         headers: Optional[Dict[str, str]] = None,
         timeout: int = 10,
         proxies: Optional[Dict[str, str]] = None,
@@ -46,7 +46,7 @@ class HTTPClient:
             verify_ssl: Проверять SSL сертификаты
         """
         # Сохраняем конфигурацию
-        self._base_url = base_url.rstrip("/")
+        self._base_url = base_url.rstrip("/") if base_url else None
         self._headers = headers if headers else {}
         self._timeout = timeout
         self._proxies = proxies

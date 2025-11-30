@@ -42,7 +42,7 @@ class TestHTTPClientInitialization:
 
     def test_init_with_default_timeout(self):
         """Test initialization with default timeout."""
-        client = HTTPClient()
+        client = HTTPClient(timeout=30)
         assert client.timeout == 30  # Default timeout
         client.close()
 

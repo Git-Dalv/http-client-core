@@ -1,6 +1,6 @@
 # tests/unit/test_core_edge_cases.py
 import pytest
-
+import responses
 from src.http_client.core.exceptions import NotFoundError, TimeoutError
 from src.http_client.core.http_client import HTTPClient
 
@@ -118,8 +118,12 @@ def test_context_manager_with_error():
 
 def test_http_methods():
     """Тест всех HTTP методов"""
-    client = HTTPClient(base_url="https://httpbin.org")
+    responses.add(responses.POST, "https://httpbin.org/post", json={}, status=200)
 
+    client = HTTPClient(base_url="https://httpbin.org")
+    response = client.post("/post", json={"key": "value"})
+
+    assert response.status_code == 200
     # GET
     response = client.get("/get")
     assert response.status_code == 200

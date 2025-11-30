@@ -289,9 +289,9 @@ def test_session_persistence():
 def test_max_redirects():
     """Тест настройки максимального количества редиректов"""
     client = HTTPClient(base_url="https://httpbin.org", max_redirects=5)
-
     # Тест редиректа
     response = client.get("/redirect/3")
+
     assert response.status_code == 200
 
     client.close()
