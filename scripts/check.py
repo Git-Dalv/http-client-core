@@ -74,7 +74,9 @@ def run_command(
             command,
             check=check,
             capture_output=True,
-            text=True
+            text=True,
+            encoding='utf-8',
+            errors='ignore'
         )
 
         success = result.returncode == 0
