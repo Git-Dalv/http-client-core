@@ -2,12 +2,12 @@
 Comprehensive tests for LoggingPlugin - complete coverage.
 """
 
-import pytest
-import logging
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch
+
 import requests
-from src.http_client.plugins.logging_plugin import LoggingPlugin
+
 from src.http_client.core.exceptions import HTTPClientException
+from src.http_client.plugins.logging_plugin import LoggingPlugin
 
 
 class TestLoggingPluginInit:
@@ -21,6 +21,7 @@ class TestLoggingPluginInit:
     def test_plugin_is_instance_of_plugin_base(self):
         """Test that LoggingPlugin inherits from Plugin."""
         from src.http_client.plugins.plugin import Plugin
+
         plugin = LoggingPlugin()
         assert isinstance(plugin, Plugin)
 
@@ -28,7 +29,7 @@ class TestLoggingPluginInit:
 class TestLoggingPluginBeforeRequest:
     """Test before_request hook."""
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_logs_basic_info(self, mock_logger):
         """Test that before_request logs method and URL."""
         plugin = LoggingPlugin()
@@ -40,7 +41,7 @@ class TestLoggingPluginBeforeRequest:
         )
         assert result == {}
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_logs_post_method(self, mock_logger):
         """Test logging for POST request."""
         plugin = LoggingPlugin()
@@ -51,7 +52,7 @@ class TestLoggingPluginBeforeRequest:
             "Sending POST request to https://api.example.com/users"
         )
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_logs_json_body(self, mock_logger):
         """Test that before_request logs JSON body at debug level."""
         plugin = LoggingPlugin()
@@ -67,7 +68,7 @@ class TestLoggingPluginBeforeRequest:
         )
         assert result == kwargs
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_logs_params(self, mock_logger):
         """Test that before_request logs query params at debug level."""
         plugin = LoggingPlugin()
@@ -76,19 +77,14 @@ class TestLoggingPluginBeforeRequest:
         result = plugin.before_request("GET", "https://api.example.com/users", **kwargs)
 
         mock_logger.info.assert_called_once()
-        mock_logger.debug.assert_called_once_with(
-            "Request params: {'page': 1, 'limit': 10}"
-        )
+        mock_logger.debug.assert_called_once_with("Request params: {'page': 1, 'limit': 10}")
         assert result == kwargs
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_logs_both_json_and_params(self, mock_logger):
         """Test logging when both json and params are present."""
         plugin = LoggingPlugin()
-        kwargs = {
-            "json": {"data": "value"},
-            "params": {"filter": "active"}
-        }
+        kwargs = {"json": {"data": "value"}, "params": {"filter": "active"}}
 
         result = plugin.before_request("POST", "https://api.example.com/items", **kwargs)
 
@@ -98,7 +94,7 @@ class TestLoggingPluginBeforeRequest:
         mock_logger.debug.assert_any_call("Request params: {'filter': 'active'}")
         assert result == kwargs
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_without_json_or_params(self, mock_logger):
         """Test that debug is not called when no json or params."""
         plugin = LoggingPlugin()
@@ -108,14 +104,11 @@ class TestLoggingPluginBeforeRequest:
         mock_logger.info.assert_called_once()
         mock_logger.debug.assert_not_called()
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_with_other_kwargs(self, mock_logger):
         """Test before_request with other kwargs like headers, timeout."""
         plugin = LoggingPlugin()
-        kwargs = {
-            "headers": {"Authorization": "Bearer token"},
-            "timeout": 30
-        }
+        kwargs = {"headers": {"Authorization": "Bearer token"}, "timeout": 30}
 
         result = plugin.before_request("GET", "https://api.example.com/data", **kwargs)
 
@@ -124,21 +117,21 @@ class TestLoggingPluginBeforeRequest:
         mock_logger.debug.assert_not_called()
         assert result == kwargs
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_preserves_kwargs(self, mock_logger):
         """Test that before_request returns kwargs unchanged."""
         plugin = LoggingPlugin()
         kwargs = {
             "json": {"test": "data"},
             "params": {"key": "value"},
-            "headers": {"X-Custom": "header"}
+            "headers": {"X-Custom": "header"},
         }
 
         result = plugin.before_request("POST", "https://api.example.com/test", **kwargs)
 
         assert result == kwargs
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_with_complex_json(self, mock_logger):
         """Test logging with complex nested JSON."""
         plugin = LoggingPlugin()
@@ -146,7 +139,7 @@ class TestLoggingPluginBeforeRequest:
             "json": {
                 "user": {"name": "John", "age": 30},
                 "items": [1, 2, 3],
-                "metadata": {"created": "2024-01-01"}
+                "metadata": {"created": "2024-01-01"},
             }
         }
 
@@ -157,7 +150,7 @@ class TestLoggingPluginBeforeRequest:
         call_args = mock_logger.debug.call_args[0][0]
         assert "Request body:" in call_args
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_different_http_methods(self, mock_logger):
         """Test logging for different HTTP methods."""
         plugin = LoggingPlugin()
@@ -175,7 +168,7 @@ class TestLoggingPluginBeforeRequest:
 class TestLoggingPluginAfterResponse:
     """Test after_response hook."""
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_logs_status_and_url(self, mock_logger):
         """Test that after_response logs status code and URL."""
         plugin = LoggingPlugin()
@@ -192,7 +185,7 @@ class TestLoggingPluginAfterResponse:
         )
         assert result == response
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_logs_response_body_debug(self, mock_logger):
         """Test that after_response logs first 200 chars of response body."""
         plugin = LoggingPlugin()
@@ -208,7 +201,7 @@ class TestLoggingPluginAfterResponse:
             'Response body: {"result": "success", "data": "test"}...'
         )
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_truncates_long_body(self, mock_logger):
         """Test that response body is truncated to 200 characters."""
         plugin = LoggingPlugin()
@@ -225,7 +218,7 @@ class TestLoggingPluginAfterResponse:
         expected_body = "x" * 200 + "..."
         mock_logger.debug.assert_called_once_with(f"Response body: {expected_body}")
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_with_201_status(self, mock_logger):
         """Test logging with 201 Created status."""
         plugin = LoggingPlugin()
@@ -241,7 +234,7 @@ class TestLoggingPluginAfterResponse:
             "Received response: 201 from https://api.example.com/users"
         )
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_with_404_status(self, mock_logger):
         """Test logging with 404 Not Found status."""
         plugin = LoggingPlugin()
@@ -257,7 +250,7 @@ class TestLoggingPluginAfterResponse:
             "Received response: 404 from https://api.example.com/notfound"
         )
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_with_500_status(self, mock_logger):
         """Test logging with 500 Internal Server Error status."""
         plugin = LoggingPlugin()
@@ -273,7 +266,7 @@ class TestLoggingPluginAfterResponse:
             "Received response: 500 from https://api.example.com/error"
         )
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_preserves_response(self, mock_logger):
         """Test that after_response returns the same response object."""
         plugin = LoggingPlugin()
@@ -290,7 +283,7 @@ class TestLoggingPluginAfterResponse:
         assert result.status_code == 200
         assert result.headers == {"Content-Type": "application/json"}
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_with_empty_body(self, mock_logger):
         """Test logging with empty response body."""
         plugin = LoggingPlugin()
@@ -305,7 +298,7 @@ class TestLoggingPluginAfterResponse:
         mock_logger.info.assert_called_once()
         mock_logger.debug.assert_called_once_with("Response body: ...")
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_with_short_body(self, mock_logger):
         """Test logging with body shorter than 200 chars."""
         plugin = LoggingPlugin()
@@ -319,7 +312,7 @@ class TestLoggingPluginAfterResponse:
 
         mock_logger.debug.assert_called_once_with("Response body: Short response...")
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_with_json_body(self, mock_logger):
         """Test logging with JSON response body."""
         plugin = LoggingPlugin()
@@ -338,7 +331,7 @@ class TestLoggingPluginAfterResponse:
 class TestLoggingPluginOnError:
     """Test on_error hook."""
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_on_error_logs_error(self, mock_logger):
         """Test that on_error logs the error message."""
         plugin = LoggingPlugin()
@@ -346,11 +339,9 @@ class TestLoggingPluginOnError:
 
         plugin.on_error(error)
 
-        mock_logger.error.assert_called_once_with(
-            "Request failed with error: Connection timeout"
-        )
+        mock_logger.error.assert_called_once_with("Request failed with error: Connection timeout")
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_on_error_with_request_exception(self, mock_logger):
         """Test logging with requests.RequestException."""
         plugin = LoggingPlugin()
@@ -358,11 +349,9 @@ class TestLoggingPluginOnError:
 
         plugin.on_error(error)
 
-        mock_logger.error.assert_called_once_with(
-            "Request failed with error: Network error"
-        )
+        mock_logger.error.assert_called_once_with("Request failed with error: Network error")
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_on_error_with_generic_exception(self, mock_logger):
         """Test logging with generic Exception."""
         plugin = LoggingPlugin()
@@ -370,11 +359,9 @@ class TestLoggingPluginOnError:
 
         plugin.on_error(error)
 
-        mock_logger.error.assert_called_once_with(
-            "Request failed with error: Unexpected error"
-        )
+        mock_logger.error.assert_called_once_with("Request failed with error: Unexpected error")
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_on_error_with_timeout_error(self, mock_logger):
         """Test logging with timeout error."""
         plugin = LoggingPlugin()
@@ -386,7 +373,7 @@ class TestLoggingPluginOnError:
             "Request failed with error: Request timeout after 30s"
         )
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_on_error_with_connection_error(self, mock_logger):
         """Test logging with connection error."""
         plugin = LoggingPlugin()
@@ -398,7 +385,7 @@ class TestLoggingPluginOnError:
             "Request failed with error: Failed to establish connection"
         )
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_on_error_multiple_calls(self, mock_logger):
         """Test multiple error logging calls."""
         plugin = LoggingPlugin()
@@ -416,7 +403,7 @@ class TestLoggingPluginOnError:
 class TestLoggingPluginIntegration:
     """Test complete request-response-error flow."""
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_complete_successful_request_flow(self, mock_logger):
         """Test logging for complete successful request."""
         plugin = LoggingPlugin()
@@ -437,7 +424,7 @@ class TestLoggingPluginIntegration:
         assert mock_logger.debug.call_count == 2
         mock_logger.error.assert_not_called()
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_complete_failed_request_flow(self, mock_logger):
         """Test logging for failed request."""
         plugin = LoggingPlugin()
@@ -453,7 +440,7 @@ class TestLoggingPluginIntegration:
         mock_logger.info.assert_called_once()
         mock_logger.error.assert_called_once()
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_multiple_requests_logging(self, mock_logger):
         """Test logging for multiple consecutive requests."""
         plugin = LoggingPlugin()
@@ -481,7 +468,7 @@ class TestLoggingPluginIntegration:
 class TestLoggingPluginEdgeCases:
     """Test edge cases and special scenarios."""
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_with_none_values(self, mock_logger):
         """Test before_request with None values in kwargs."""
         plugin = LoggingPlugin()
@@ -493,7 +480,7 @@ class TestLoggingPluginEdgeCases:
         mock_logger.info.assert_called_once()
         mock_logger.debug.assert_not_called()
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_after_response_with_unicode_body(self, mock_logger):
         """Test logging with Unicode characters in response."""
         plugin = LoggingPlugin()
@@ -509,7 +496,7 @@ class TestLoggingPluginEdgeCases:
         call_args = mock_logger.debug.call_args[0][0]
         assert "Тест данных с unicode символами 你好" in call_args
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_on_error_with_empty_error_message(self, mock_logger):
         """Test on_error with exception having empty message."""
         plugin = LoggingPlugin()
@@ -519,7 +506,7 @@ class TestLoggingPluginEdgeCases:
 
         mock_logger.error.assert_called_once_with("Request failed with error: ")
 
-    @patch('src.http_client.plugins.logging_plugin.logger')
+    @patch("src.http_client.plugins.logging_plugin.logger")
     def test_before_request_with_empty_json(self, mock_logger):
         """Test before_request with empty json dict."""
         plugin = LoggingPlugin()

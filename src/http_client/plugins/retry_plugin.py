@@ -2,8 +2,11 @@
 
 import time
 from typing import Any, Dict
+
 import requests
+
 from .plugin import Plugin
+
 
 class RetryPlugin(Plugin):
     """Плагин для автоматических повторных попыток при ошибках"""
@@ -15,7 +18,7 @@ class RetryPlugin(Plugin):
 
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         # Сохраняем параметры для возможных повторных попыток
-        self.last_request = {'method': method, 'url': url, 'kwargs': kwargs}
+        self.last_request = {"method": method, "url": url, "kwargs": kwargs}
         return kwargs
 
     def after_response(self, response: requests.Response) -> requests.Response:

@@ -1,8 +1,10 @@
 # src/http_client/core/http_client.py
+from typing import Any, Dict, List, Optional
+
 import requests
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
-from typing import Any, Dict, List, Optional
+
 from ..plugins.plugin import Plugin
 from .error_handler import ErrorHandler
 
@@ -20,15 +22,15 @@ class HTTPClient:
     """
 
     def __init__(
-            self,
-            base_url: str,
-            headers: Optional[Dict[str, str]] = None,
-            timeout: int = 10,
-            proxies: Optional[Dict[str, str]] = None,
-            pool_connections: int = 10,
-            pool_maxsize: int = 10,
-            max_redirects: int = 30,
-            verify_ssl: bool = True
+        self,
+        base_url: str,
+        headers: Optional[Dict[str, str]] = None,
+        timeout: int = 10,
+        proxies: Optional[Dict[str, str]] = None,
+        pool_connections: int = 10,
+        pool_maxsize: int = 10,
+        max_redirects: int = 30,
+        verify_ssl: bool = True,
     ):
         """
         Инициализация HTTP клиента.
@@ -44,7 +46,7 @@ class HTTPClient:
             verify_ssl: Проверять SSL сертификаты
         """
         # Сохраняем конфигурацию
-        self._base_url = base_url.rstrip('/')
+        self._base_url = base_url.rstrip("/")
         self._headers = headers if headers else {}
         self._timeout = timeout
         self._proxies = proxies
@@ -57,10 +59,10 @@ class HTTPClient:
         adapter = HTTPAdapter(
             pool_connections=pool_connections,
             pool_maxsize=pool_maxsize,
-            max_retries=0  # Ретраи управляются через плагин
+            max_retries=0,  # Ретраи управляются через плагин
         )
-        self._session.mount('http://', adapter)
-        self._session.mount('https://', adapter)
+        self._session.mount("http://", adapter)
+        self._session.mount("https://", adapter)
 
         # Настраиваем параметры сессии
         self._session.headers.update(self._headers)
@@ -78,8 +80,8 @@ class HTTPClient:
         Защита от изменения конфигурации после инициализации.
         Обеспечивает потокобезопасность.
         """
-        if hasattr(self, '_initialized') and self._initialized:
-            if not name.startswith('_'):
+        if hasattr(self, "_initialized") and self._initialized:
+            if not name.startswith("_"):
                 raise RuntimeError(
                     f"Cannot modify attribute '{name}' after client initialization. "
                     "Create a new client instance with different configuration."
@@ -102,7 +104,7 @@ class HTTPClient:
         Закрывает сессию и освобождает ресурсы.
         Рекомендуется вызывать после завершения работы с клиентом.
         """
-        if hasattr(self, '_session'):
+        if hasattr(self, "_session"):
             self._session.close()
 
     # ==================== Управление плагинами ====================
@@ -144,7 +146,7 @@ class HTTPClient:
     # src/http_client/core/http_client.py
 
     # Замените метод set_cookie на этот:
-    def set_cookie(self, name: str, value: str, domain: str = '', path: str = '/'):
+    def set_cookie(self, name: str, value: str, domain: str = "", path: str = "/"):
         """
         Устанавливает куку.
 
@@ -163,11 +165,11 @@ class HTTPClient:
         """
         # Если domain не указан или None, используем пустую строку (supercookie)
         if domain is None:
-            domain = ''
+            domain = ""
 
         self._session.cookies.set(name, value, domain=domain, path=path)
 
-    def remove_cookie(self, name: str, domain: str = None, path: str = '/'):
+    def remove_cookie(self, name: str, domain: str = None, path: str = "/"):
         """
         Удаляет конкретную куку.
 
@@ -241,7 +243,7 @@ class HTTPClient:
             proxies: Словарь с прокси {'http': 'http://proxy:port', 'https': 'https://proxy:port'}
         """
         # Создаем новый атрибут через object.__setattr__ чтобы обойти immutability
-        object.__setattr__(self, '_proxies', proxies)
+        object.__setattr__(self, "_proxies", proxies)
 
     def get_proxies(self) -> Optional[Dict[str, str]]:
         """
@@ -254,7 +256,7 @@ class HTTPClient:
 
     def clear_proxies(self):
         """Удаляет прокси"""
-        object.__setattr__(self, '_proxies', None)
+        object.__setattr__(self, "_proxies", None)
 
     # ==================== Внутренние методы ====================
 
@@ -315,11 +317,11 @@ class HTTPClient:
             Полный URL
         """
         # Если endpoint - абсолютный URL, используем его как есть
-        if endpoint.startswith(('http://', 'https://')):
+        if endpoint.startswith(("http://", "https://")):
             return endpoint
 
         # Убираем начальный слеш из endpoint если есть
-        endpoint = endpoint.lstrip('/')
+        endpoint = endpoint.lstrip("/")
 
         # Склеиваем base_url и endpoint
         return f"{self._base_url}/{endpoint}"
@@ -346,34 +348,34 @@ class HTTPClient:
             kwargs = self._execute_before_request(method, url, **kwargs)
 
             # НОВОЕ: Проверяем наличие закэшированного ответа
-            if '_cached_response' in kwargs:
-                cached_response = kwargs.pop('_cached_response')
+            if "_cached_response" in kwargs:
+                cached_response = kwargs.pop("_cached_response")
                 # Создаем mock request объект
-                cached_response.request = type('Request', (), {
-                    'method': method,
-                    'url': url,
-                    '_cache_key': kwargs.get('_cache_key')
-                })()
+                cached_response.request = type(
+                    "Request",
+                    (),
+                    {"method": method, "url": url, "_cache_key": kwargs.get("_cache_key")},
+                )()
                 return cached_response
 
             # Устанавливаем прокси если не переопределены в kwargs
-            if 'proxies' not in kwargs and self._proxies:
-                kwargs['proxies'] = self._proxies
+            if "proxies" not in kwargs and self._proxies:
+                kwargs["proxies"] = self._proxies
 
             # Устанавливаем timeout если не переопределен
-            if 'timeout' not in kwargs:
-                kwargs['timeout'] = self._timeout
+            if "timeout" not in kwargs:
+                kwargs["timeout"] = self._timeout
 
             # Устанавливаем verify если не переопределен
-            if 'verify' not in kwargs:
-                kwargs['verify'] = self._verify_ssl
+            if "verify" not in kwargs:
+                kwargs["verify"] = self._verify_ssl
 
             # Удаляем ВСЕ служебные параметры перед запросом
-            cache_key = kwargs.pop('_cache_key', None)
-            monitoring_request_id = kwargs.pop('_monitoring_request_id', None)  # НОВОЕ
-            start_time = kwargs.pop('_start_time', None)  # Для MonitoringPlugin
-            req_method = kwargs.pop('_method', None)  # Для MonitoringPlugin
-            req_url = kwargs.pop('_url', None)  # Для MonitoringPlugin
+            cache_key = kwargs.pop("_cache_key", None)
+            monitoring_request_id = kwargs.pop("_monitoring_request_id", None)  # НОВОЕ
+            start_time = kwargs.pop("_start_time", None)  # Для MonitoringPlugin
+            req_method = kwargs.pop("_method", None)  # Для MonitoringPlugin
+            req_url = kwargs.pop("_url", None)  # Для MonitoringPlugin
 
             # Выполняем запрос через сессию
             response = self._session.request(method, url, **kwargs)

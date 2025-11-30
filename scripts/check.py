@@ -186,6 +186,8 @@ def main():
     if not args.skip_tests:
         success, output = run_command(
             [
+                sys.executable,
+                "-m",
                 "pytest",
                 "-v",
                 "-o", "addopts="

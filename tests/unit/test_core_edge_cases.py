@@ -1,7 +1,8 @@
 # tests/unit/test_core_edge_cases.py
 import pytest
-from src.http_client.core.http_client import HTTPClient
+
 from src.http_client.core.exceptions import NotFoundError, TimeoutError
+from src.http_client.core.http_client import HTTPClient
 
 
 def test_404_error_handling():
@@ -86,8 +87,8 @@ def test_session_property():
     # Проверяем, что можем получить доступ к сессии
     session = client.session
     assert session is not None
-    assert hasattr(session, 'get')
-    assert hasattr(session, 'post')
+    assert hasattr(session, "get")
+    assert hasattr(session, "post")
 
     client.close()
 

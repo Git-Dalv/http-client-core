@@ -3,15 +3,16 @@ Tests for custom exceptions.
 """
 
 import pytest
+
 from src.http_client.core.exceptions import (
-    HTTPClientException,
-    ConnectionError,
-    TimeoutError,
-    NotFoundError,
     BadRequestError,
-    UnauthorizedError,
+    ConnectionError,
     ForbiddenError,
-    ServerError
+    HTTPClientException,
+    NotFoundError,
+    ServerError,
+    TimeoutError,
+    UnauthorizedError,
 )
 
 

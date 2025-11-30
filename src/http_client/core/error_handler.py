@@ -1,19 +1,28 @@
 # src/http_client/core/error_handler.py
 
-import requests
-from requests.exceptions import Timeout, ConnectionError as RequestsConnectionError, RequestException
 from typing import Optional
+
+import requests
+from requests.exceptions import (
+    ConnectionError as RequestsConnectionError,
+)
+from requests.exceptions import (
+    RequestException,
+    Timeout,
+)
+
 from .exceptions import (
-    HTTPClientException,
-    ConnectionError,
-    TimeoutError,
     BadRequestError,
-    UnauthorizedError,
+    ConnectionError,
     ForbiddenError,
+    HTTPClientException,
+    HTTPError,
     NotFoundError,
     ServerError,
-    HTTPError
+    TimeoutError,
+    UnauthorizedError,
 )
+
 
 class ErrorHandler:
     """Класс для обработки ошибок HTTP запросов"""
@@ -69,10 +78,6 @@ class ErrorHandler:
         """Проверяет, можно ли повторить запрос после этой ошибки"""
 
         # Повторяем при ошибках подключения, таймаутах и серверных ошибках
-        retryable_errors = (
-            ConnectionError,
-            TimeoutError,
-            ServerError
-        )
+        retryable_errors = (ConnectionError, TimeoutError, ServerError)
 
         return isinstance(error, retryable_errors)

@@ -4,11 +4,12 @@
 
 import pytest
 import responses
+
+from src.http_client.core.exceptions import HTTPClientException
 from src.http_client.core.http_client import HTTPClient
+from src.http_client.plugins.logging_plugin import LoggingPlugin
 from src.http_client.plugins.monitoring_plugin import MonitoringPlugin
 from src.http_client.plugins.retry_plugin import RetryPlugin
-from src.http_client.plugins.logging_plugin import LoggingPlugin
-from src.http_client.core.exceptions import HTTPClientException
 
 
 @pytest.mark.integration
@@ -22,19 +23,13 @@ class TestFullIntegration:
         retry = RetryPlugin(max_retries=3)
         logging = LoggingPlugin()
 
-        client = HTTPClient(
-            base_url="https://api.example.com",
-            timeout=10
-        )
+        client = HTTPClient(base_url="https://api.example.com", timeout=10)
         client.add_plugin(monitoring)
         client.add_plugin(retry)
         client.add_plugin(logging)
 
         responses.add(
-            responses.GET,
-            "https://api.example.com/users",
-            json={"users": []},
-            status=200
+            responses.GET, "https://api.example.com/users", json={"users": []}, status=200
         )
 
         response = client.get("/users")
@@ -42,7 +37,7 @@ class TestFullIntegration:
         assert response.status_code == 200
         # Проверяем что монitorинг сработал
         metrics = monitoring.get_metrics()
-        assert metrics['total_requests'] >= 1
+        assert metrics["total_requests"] >= 1
 
         client.close()
 
@@ -58,15 +53,14 @@ class TestFullIntegration:
 
         # First call fails, second succeeds
         responses.add(responses.GET, "https://api.example.com/data", status=500)
-        responses.add(responses.GET, "https://api.example.com/data",
-                     json={"ok": True}, status=200)
+        responses.add(responses.GET, "https://api.example.com/data", json={"ok": True}, status=200)
 
         response = client.get("/data")
 
         assert response.status_code == 200
         # Проверяем метрики: должно быть 2 запроса (1 fail + 1 success)
         metrics = monitoring.get_metrics()
-        assert metrics['total_requests'] >= 1
+        assert metrics["total_requests"] >= 1
 
         client.close()
 
@@ -78,12 +72,13 @@ class TestFullIntegration:
         client.add_plugin(monitoring)
 
         # Setup responses
-        responses.add(responses.GET, "https://api.example.com/users",
-                     json={"users": []}, status=200)
-        responses.add(responses.POST, "https://api.example.com/users",
-                     json={"id": 1}, status=201)
-        responses.add(responses.GET, "https://api.example.com/posts",
-                     json={"posts": []}, status=200)
+        responses.add(
+            responses.GET, "https://api.example.com/users", json={"users": []}, status=200
+        )
+        responses.add(responses.POST, "https://api.example.com/users", json={"id": 1}, status=201)
+        responses.add(
+            responses.GET, "https://api.example.com/posts", json={"posts": []}, status=200
+        )
 
         # Make requests
         client.get("/users")
@@ -92,9 +87,9 @@ class TestFullIntegration:
 
         # Check metrics
         metrics = monitoring.get_metrics()
-        assert metrics['total_requests'] == 3
-        assert 'GET' in metrics['method_stats']
-        assert 'POST' in metrics['method_stats']
+        assert metrics["total_requests"] == 3
+        assert "GET" in metrics["method_stats"]
+        assert "POST" in metrics["method_stats"]
 
         client.close()
 
@@ -128,12 +123,7 @@ class TestFullIntegration:
         """Test context manager usage with plugins."""
         monitoring = MonitoringPlugin()
 
-        responses.add(
-            responses.GET,
-            "https://api.example.com/test",
-            json={"ok": True},
-            status=200
-        )
+        responses.add(responses.GET, "https://api.example.com/test", json={"ok": True}, status=200)
 
         with HTTPClient(base_url="https://api.example.com", timeout=10) as client:
             client.add_plugin(monitoring)
@@ -142,7 +132,7 @@ class TestFullIntegration:
 
         # After context exit, metrics should still be accessible
         metrics = monitoring.get_metrics()
-        assert metrics['total_requests'] == 1
+        assert metrics["total_requests"] == 1
 
 
 @pytest.mark.integration
@@ -162,8 +152,7 @@ class TestPluginInteractions:
         # Setup multiple failures then success
         responses.add(responses.GET, "https://api.example.com/flaky", status=500)
         responses.add(responses.GET, "https://api.example.com/flaky", status=500)
-        responses.add(responses.GET, "https://api.example.com/flaky",
-                     json={"ok": True}, status=200)
+        responses.add(responses.GET, "https://api.example.com/flaky", json={"ok": True}, status=200)
 
         response = client.get("/flaky")
         assert response.status_code == 200
@@ -181,10 +170,7 @@ class TestPluginInteractions:
         client.add_plugin(monitoring)
 
         responses.add(
-            responses.GET,
-            "https://api.example.com/data",
-            json={"result": "ok"},
-            status=200
+            responses.GET, "https://api.example.com/data", json={"result": "ok"}, status=200
         )
 
         response = client.get("/data")
@@ -192,7 +178,7 @@ class TestPluginInteractions:
 
         # Check monitoring metrics
         metrics = monitoring.get_metrics()
-        assert metrics['total_requests'] == 1
+        assert metrics["total_requests"] == 1
 
         client.close()
 
@@ -209,14 +195,22 @@ class TestRealWorldScenarios:
         client.add_plugin(monitoring)
 
         # Setup responses for typical workflow
-        responses.add(responses.GET, "https://api.example.com/users",
-                     json={"users": [{"id": 1}]}, status=200)
-        responses.add(responses.GET, "https://api.example.com/users/1",
-                     json={"id": 1, "name": "Test"}, status=200)
-        responses.add(responses.PUT, "https://api.example.com/users/1",
-                     json={"id": 1, "name": "Updated"}, status=200)
-        responses.add(responses.DELETE, "https://api.example.com/users/1",
-                     status=204)
+        responses.add(
+            responses.GET, "https://api.example.com/users", json={"users": [{"id": 1}]}, status=200
+        )
+        responses.add(
+            responses.GET,
+            "https://api.example.com/users/1",
+            json={"id": 1, "name": "Test"},
+            status=200,
+        )
+        responses.add(
+            responses.PUT,
+            "https://api.example.com/users/1",
+            json={"id": 1, "name": "Updated"},
+            status=200,
+        )
+        responses.add(responses.DELETE, "https://api.example.com/users/1", status=204)
 
         # Execute workflow
         users = client.get("/users")
@@ -233,7 +227,7 @@ class TestRealWorldScenarios:
 
         # Verify metrics
         metrics = monitoring.get_metrics()
-        assert metrics['total_requests'] == 4
-        assert metrics['failed_requests'] == 0
+        assert metrics["total_requests"] == 4
+        assert metrics["failed_requests"] == 0
 
         client.close()

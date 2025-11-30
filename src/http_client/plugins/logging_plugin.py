@@ -2,20 +2,23 @@
 
 import logging
 from typing import Any, Dict
+
 import requests
+
 from .plugin import Plugin
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class LoggingPlugin(Plugin):
     """Плагин для логирования HTTP запросов и ответов"""
 
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         logger.info(f"Sending {method} request to {url}")
-        if kwargs.get('json'):
+        if kwargs.get("json"):
             logger.debug(f"Request body: {kwargs['json']}")
-        if kwargs.get('params'):
+        if kwargs.get("params"):
             logger.debug(f"Request params: {kwargs['params']}")
         return kwargs
 
