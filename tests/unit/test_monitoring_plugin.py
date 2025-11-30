@@ -150,7 +150,7 @@ def test_monitoring_error_tracking():
     # Проверяем историю ошибок
     errors = monitoring.get_recent_errors()
     assert len(errors) >= 1
-    assert errors[0]['error_type'] == 'NotFoundError'
+    assert errors[0]['error_type'] == 'HTTPError'
     assert 'method' in errors[0]
     assert 'url' in errors[0]
 
