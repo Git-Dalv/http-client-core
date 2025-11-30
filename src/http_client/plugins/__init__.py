@@ -1,5 +1,6 @@
 # src/http_client/plugins/__init__.py
 from .auth_plugin import AuthPlugin
+from .browser_fingerprint import BrowserFingerprintPlugin
 from .cache_plugin import CachePlugin
 from .disk_cache_plugin import DiskCachePlugin
 from .logging_plugin import LoggingPlugin
@@ -17,4 +18,5 @@ __all__ = [
     "AuthPlugin",
     "DiskCachePlugin",
     "MonitoringPlugin",
+    "BrowserFingerprintPlugin",
 ]
