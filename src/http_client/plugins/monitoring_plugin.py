@@ -178,13 +178,16 @@ class MonitoringPlugin(Plugin):
         """Устаревший метод. Используйте after_response."""
         return self.after_response(response)
 
-    def on_error(self, exception: Exception, **kwargs: Any) -> None:
+    def on_error(self, exception: Exception, **kwargs: Any) -> bool:
         """
         Обработчик ошибок - отслеживает неудачные запросы.
 
         Args:
             exception: Исключение которое произошло
             **kwargs: Дополнительные параметры (method, url, и т.д.)
+
+        Returns:
+            False - не повторять запрос, просто логировать
         """
         with self._lock:
             self._total_requests += 1
@@ -252,6 +255,8 @@ class MonitoringPlugin(Plugin):
             # Ограничиваем размер истории
             if len(self._request_history) > self._history_size:
                 self._request_history.pop(0)
+
+        return False  # Не повторять запрос, просто логировать
 
     def _extract_endpoint(self, url: str) -> str:
         """

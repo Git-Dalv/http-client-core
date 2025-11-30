@@ -290,21 +290,31 @@ class HTTPClient:
             response = plugin.after_response(response)
         return response
 
-    def _execute_on_error(self, exception: Exception, **kwargs: Any) -> None:
+    def _execute_on_error(self, exception: Exception, **kwargs: Any) -> bool:
         """
         Выполняет on_error хуки всех плагинов.
 
         Args:
             exception: Исключение которое произошло
             **kwargs: Дополнительные параметры
+
+        Returns:
+            True если хотя бы один плагин хочет повторить запрос (retry)
+            False если исключение должно быть выброшено
         """
+        should_retry = False
         for plugin in self._plugins:
             try:
                 # ВАЖНО: передаем method и url в kwargs
-                plugin.on_error(exception, **kwargs)
+                result = plugin.on_error(exception, **kwargs)
+                # Если хотя бы один плагин вернул True - делаем retry
+                if result is True:
+                    should_retry = True
             except Exception as plugin_error:
                 # Логируем ошибку плагина, но не прерываем выполнение
                 print(f"Plugin {plugin.__class__.__name__} error in on_error: {plugin_error}")
+
+        return should_retry
 
     def _build_url(self, endpoint: str) -> str:
         """
@@ -342,70 +352,84 @@ class HTTPClient:
             HTTPClientException: При ошибках выполнения запроса
         """
         url = self._build_url(endpoint)
+        original_kwargs = kwargs.copy()  # Сохраняем оригинальные kwargs для retry
 
-        try:
-            # Выполняем before_request хуки
-            kwargs = self._execute_before_request(method, url, **kwargs)
+        # Retry loop
+        while True:
+            try:
+                # Используем копию kwargs для каждой попытки
+                request_kwargs = original_kwargs.copy()
 
-            # НОВОЕ: Проверяем наличие закэшированного ответа
-            if "_cached_response" in kwargs:
-                cached_response = kwargs.pop("_cached_response")
-                # Создаем mock request объект
-                cached_response.request = type(
-                    "Request",
-                    (),
-                    {"method": method, "url": url, "_cache_key": kwargs.get("_cache_key")},
-                )()
-                return cached_response
+                # Выполняем before_request хуки
+                request_kwargs = self._execute_before_request(method, url, **request_kwargs)
 
-            # Устанавливаем прокси если не переопределены в kwargs
-            if "proxies" not in kwargs and self._proxies:
-                kwargs["proxies"] = self._proxies
+                # НОВОЕ: Проверяем наличие закэшированного ответа
+                if "_cached_response" in request_kwargs:
+                    cached_response = request_kwargs.pop("_cached_response")
+                    # Создаем mock request объект
+                    cached_response.request = type(
+                        "Request",
+                        (),
+                        {
+                            "method": method,
+                            "url": url,
+                            "_cache_key": request_kwargs.get("_cache_key"),
+                        },
+                    )()
+                    return cached_response
 
-            # Устанавливаем timeout если не переопределен
-            if "timeout" not in kwargs:
-                kwargs["timeout"] = self._timeout
+                # Устанавливаем прокси если не переопределены в request_kwargs
+                if "proxies" not in request_kwargs and self._proxies:
+                    request_kwargs["proxies"] = self._proxies
 
-            # Устанавливаем verify если не переопределен
-            if "verify" not in kwargs:
-                kwargs["verify"] = self._verify_ssl
+                # Устанавливаем timeout если не переопределен
+                if "timeout" not in request_kwargs:
+                    request_kwargs["timeout"] = self._timeout
 
-            # Удаляем ВСЕ служебные параметры перед запросом
-            cache_key = kwargs.pop("_cache_key", None)
-            monitoring_request_id = kwargs.pop("_monitoring_request_id", None)  # НОВОЕ
-            start_time = kwargs.pop("_start_time", None)  # Для MonitoringPlugin
-            req_method = kwargs.pop("_method", None)  # Для MonitoringPlugin
-            req_url = kwargs.pop("_url", None)  # Для MonitoringPlugin
+                # Устанавливаем verify если не переопределен
+                if "verify" not in request_kwargs:
+                    request_kwargs["verify"] = self._verify_ssl
 
-            # Выполняем запрос через сессию
-            response = self._session.request(method, url, **kwargs)
+                # Удаляем ВСЕ служебные параметры перед запросом
+                cache_key = request_kwargs.pop("_cache_key", None)
+                monitoring_request_id = request_kwargs.pop("_monitoring_request_id", None)
+                start_time = request_kwargs.pop("_start_time", None)
+                req_method = request_kwargs.pop("_method", None)
+                req_url = request_kwargs.pop("_url", None)
 
-            # Сохраняем служебные параметры в request для использования в after_response
-            if cache_key:
-                response.request._cache_key = cache_key
-            if monitoring_request_id:  # НОВОЕ
-                response.request._monitoring_request_id = monitoring_request_id
-            if start_time:  # Для MonitoringPlugin
-                response.request._start_time = start_time
-            if req_method:  # Для MonitoringPlugin
-                response.request._method = req_method
-            if req_url:  # Для MonitoringPlugin
-                response.request._url = req_url
+                # Выполняем запрос через сессию
+                response = self._session.request(method, url, **request_kwargs)
 
-            # Проверяем статус код
-            response.raise_for_status()
+                # Сохраняем служебные параметры в request для использования в after_response
+                if cache_key:
+                    response.request._cache_key = cache_key
+                if monitoring_request_id:
+                    response.request._monitoring_request_id = monitoring_request_id
+                if start_time:
+                    response.request._start_time = start_time
+                if req_method:
+                    response.request._method = req_method
+                if req_url:
+                    response.request._url = req_url
 
-            # Выполняем after_response хуки
-            response = self._execute_after_response(response)
+                # Проверяем статус код
+                response.raise_for_status()
 
-            return response
+                # Выполняем after_response хуки
+                response = self._execute_after_response(response)
 
-        except RequestException as e:
-            # ИСПРАВЛЕНО: Передаем method и url в on_error
-            self._execute_on_error(e, method=method, url=url)
+                return response
 
-            # Обрабатываем ошибку через ErrorHandler
-            self._error_handler.handle_request_exception(e, url, self._timeout)
+            except RequestException as e:
+                # Вызываем on_error у плагинов и проверяем нужен ли retry
+                should_retry = self._execute_on_error(e, method=method, url=url)
+
+                if should_retry:
+                    # Повторяем запрос (continue переходит к следующей итерации while True)
+                    continue
+                else:
+                    # Обрабатываем ошибку через ErrorHandler
+                    self._error_handler.handle_request_exception(e, url, self._timeout)
 
     def get(self, endpoint: str, **kwargs: Any) -> requests.Response:
         """

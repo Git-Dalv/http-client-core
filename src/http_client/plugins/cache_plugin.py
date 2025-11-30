@@ -90,6 +90,6 @@ class CachePlugin(Plugin):
             )
         return response
 
-    def on_error(self, error: Exception) -> None:
+    def on_error(self, error: Exception, **kwargs) -> bool:
         """Обработка ошибок"""
-        pass
+        return False  # Не повторять запрос

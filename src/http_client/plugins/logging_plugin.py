@@ -27,5 +27,6 @@ class LoggingPlugin(Plugin):
         logger.debug(f"Response body: {response.text[:200]}...")  # First 200 chars
         return response
 
-    def on_error(self, error: Exception) -> None:
+    def on_error(self, error: Exception, **kwargs) -> bool:
         logger.error(f"Request failed with error: {error}")
+        return False  # Не повторять запрос, просто логировать

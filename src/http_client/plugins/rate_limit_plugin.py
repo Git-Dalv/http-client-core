@@ -56,10 +56,11 @@ class RateLimitPlugin(Plugin):
         """Обработка после получения ответа"""
         return response
 
-    def on_error(self, error: Exception) -> None:
+    def on_error(self, error: Exception, **kwargs) -> bool:
         """Обработка ошибок"""
         if self.request_times:
             self.request_times.pop()
+        return False  # Не повторять запрос
 
     def reset(self):
         """Сбрасывает счетчик запросов"""
