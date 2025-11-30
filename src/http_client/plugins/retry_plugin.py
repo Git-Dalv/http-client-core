@@ -26,12 +26,20 @@ class RetryPlugin(Plugin):
         self.retry_count = 0
         return response
 
-    def on_error(self, error: Exception, **kwargs) -> None:
+    def on_error(self, error: Exception, **kwargs) -> bool:
+        """
+        Обрабатывает ошибку и решает нужен ли retry.
+
+        Returns:
+            True если нужен retry, False если нужно выбросить исключение
+        """
         self.retry_count += 1
         if self.retry_count <= self.max_retries:
             wait_time = self.backoff_factor * (2 ** (self.retry_count - 1))
             print(f"Retry {self.retry_count}/{self.max_retries} after {wait_time}s...")
             time.sleep(wait_time)
+            return True  # Повторить запрос
         else:
             print(f"Max retries ({self.max_retries}) reached. Giving up.")
             self.retry_count = 0
+            return False  # Выбросить исключение

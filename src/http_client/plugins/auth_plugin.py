@@ -50,9 +50,9 @@ class AuthPlugin(Plugin):
         """Обработка после получения ответа"""
         return response
 
-    def on_error(self, error: Exception) -> None:
+    def on_error(self, error: Exception, **kwargs) -> bool:
         """Обработка ошибок"""
-        pass
+        return False  # Не повторять запрос
 
     def update_token(self, token: str):
         """Обновляет токен аутентификации"""

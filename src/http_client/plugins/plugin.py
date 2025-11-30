@@ -20,6 +20,12 @@ class Plugin(ABC):
         pass
 
     @abstractmethod
-    def on_error(self, error: Exception, **kwargs: Any) -> None:
-        """Вызывается при возникновении ошибки"""
+    def on_error(self, error: Exception, **kwargs: Any) -> bool:
+        """
+        Вызывается при возникновении ошибки.
+
+        Returns:
+            True если плагин хочет повторить запрос (retry)
+            False если исключение должно быть выброшено
+        """
         pass

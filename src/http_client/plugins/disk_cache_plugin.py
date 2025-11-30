@@ -255,17 +255,21 @@ class DiskCachePlugin(Plugin):
         if hasattr(self, "cache"):
             self.cache.close()
 
-    def on_error(self, error: Exception):
+    def on_error(self, error: Exception, **kwargs) -> bool:
         """
         Обработка ошибок.
         При ошибке не делаем ничего особенного.
 
         Args:
             error: Возникшее исключение
+            **kwargs: Дополнительные параметры
+
+        Returns:
+            False - не повторять запрос
         """
         # При ошибке мы не кэшируем ответ
         # Можно добавить логирование если нужно
-        pass
+        return False
 
     def clear(self):
         """Очищает весь кэш"""
