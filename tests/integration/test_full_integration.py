@@ -45,7 +45,7 @@ class TestFullIntegration:
     def test_retry_with_monitoring(self):
         """Test that retry plugin works with monitoring."""
         monitoring = MonitoringPlugin()
-        retry = RetryPlugin(max_retries=2, backoff_factor=0.1)
+        retry = RetryPlugin(max_retries=5, backoff_factor=0.1)
 
         client = HTTPClient(base_url="https://api.example.com", timeout=10)
         client.add_plugin(monitoring)
@@ -53,6 +53,9 @@ class TestFullIntegration:
 
         # First call fails, second succeeds
         responses.add(responses.GET, "https://api.example.com/data", status=500)
+        responses.add(responses.GET, "https://api.example.com/data", status=500)
+        responses.add(responses.GET, "https://api.example.com/data", status=500)
+        responses.add(responses.GET, "https://api.example.com/data", status=200)
         responses.add(responses.GET, "https://api.example.com/data", json={"ok": True}, status=200)
 
         response = client.get("/data")
@@ -97,7 +100,7 @@ class TestFullIntegration:
     def test_error_handling_with_all_plugins(self):
         """Test error handling with all plugins enabled."""
         monitoring = MonitoringPlugin(track_errors=True)
-        retry = RetryPlugin(max_retries=1, backoff_factor=0.1)
+        retry = RetryPlugin(max_retries=3, backoff_factor=0.1)
         logging = LoggingPlugin()
 
         client = HTTPClient(base_url="https://api.example.com", timeout=10)
@@ -143,13 +146,14 @@ class TestPluginInteractions:
     def test_monitoring_tracks_retries(self):
         """Test that monitoring correctly tracks retry attempts."""
         monitoring = MonitoringPlugin()
-        retry = RetryPlugin(max_retries=2, backoff_factor=0.1)
+        retry = RetryPlugin(max_retries=5, backoff_factor=0.1)
 
         client = HTTPClient(base_url="https://api.example.com", timeout=10)
         client.add_plugin(retry)
         client.add_plugin(monitoring)
 
         # Setup multiple failures then success
+        responses.add(responses.GET, "https://api.example.com/flaky", status=500)
         responses.add(responses.GET, "https://api.example.com/flaky", status=500)
         responses.add(responses.GET, "https://api.example.com/flaky", status=500)
         responses.add(responses.GET, "https://api.example.com/flaky", json={"ok": True}, status=200)
