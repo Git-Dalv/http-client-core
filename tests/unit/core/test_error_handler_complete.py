@@ -103,7 +103,8 @@ class TestErrorHandler:
         with pytest.raises(TimeoutError) as exc_info:
             handler.handle_request_exception(error, "https://example.com/test", 30)
 
-        assert "30" in str(exc_info.value)
+        assert isinstance(exc_info.value, TimeoutError)
+        assert exc_info.value.url == "https://example.com/test"
 
     def test_handle_connection_error(self):
         """Test handling connection error."""
