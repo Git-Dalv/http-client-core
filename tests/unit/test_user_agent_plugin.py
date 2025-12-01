@@ -6,8 +6,8 @@ import pytest
 from unittest.mock import Mock, patch
 import requests
 
-from http_client.plugins.user_agent_plugin import UserAgentPlugin
-from http_client.utils.user_agents import CHROME_USER_AGENTS
+from src.http_client.plugins.user_agent_plugin import UserAgentPlugin
+from src.http_client.utils.user_agents import CHROME_USER_AGENTS
 
 
 class TestUserAgentPluginInit:
