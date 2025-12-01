@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "http-client-core"
-version = "0.1.0"
-description = "Extensible HTTP client built on top of requests"
+version = "1.0.0"
+description = "Production-ready HTTP client library with powerful plugin system, retry logic, and comprehensive error handling"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
     {name = "Vladislav", email = "vladm1999il@gmail.com"}
 ]
-keywords = ["http", "client", "requests", "api", "rest"]
+keywords = ["http", "client", "requests", "api", "web-scraping", "retry", "plugins"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -22,31 +22,32 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
 dependencies = [
     "requests>=2.31.0",
-    "urllib3>=2.0.0",
-    "diskcache>=5.6.0",
-    "aiofiles>=23.0.0",
 ]
 
 [project.optional-dependencies]
+progress = ["tqdm>=4.66.0"]
+all = ["tqdm>=4.66.0"]
 dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "pytest-mock>=3.11.0",
-    "black>=23.7.0",
-    "ruff>=0.0.285",
-    "mypy>=1.5.0",
-    "responses>=0.23.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "pytest-mock>=3.14.0",
+    "responses>=0.25.0",
+    "black>=24.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/http-client-core"
-Documentation = "https://http-client-core.readthedocs.io"
-Repository = "https://github.com/yourusername/http-client-core"
-Issues = "https://github.com/yourusername/http-client-core/issues"
+Homepage = "https://github.com/Git-Dalv/http-client-core"
+Documentation = "https://github.com/Git-Dalv/http-client-core/blob/main/README.md"
+Repository = "https://github.com/Git-Dalv/http-client-core"
+Issues = "https://github.com/Git-Dalv/http-client-core/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -74,6 +75,19 @@ markers = [
 line-length = 100
 target-version = ["py39", "py310", "py311", "py312"]
 include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
 
 [tool.ruff]
 line-length = 100
@@ -85,6 +99,7 @@ ignore = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["http_client"]
+profile = "black"
 
 [tool.mypy]
 python_version = "3.9"
@@ -92,3 +107,18 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
