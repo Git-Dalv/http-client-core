@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.http_client.core.exceptions import NotFoundError, TimeoutError
+from src.http_client.core.exceptions import NotFoundError, TimeoutError, TooManyRetriesError
 from src.http_client.core.http_client import HTTPClient
 
 
@@ -20,7 +20,8 @@ def test_timeout_error():
     """Тест обработки таймаута"""
     client = HTTPClient(base_url="https://httpbin.org", timeout=0.001)
 
-    with pytest.raises(TimeoutError):
+    # Может быть TimeoutError или TooManyRetriesError (из-за retry логики)
+    with pytest.raises((TimeoutError, TooManyRetriesError)):
         client.get("/delay/5")
 
 

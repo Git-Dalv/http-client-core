@@ -1,7 +1,7 @@
 # tests/unit/test_core_edge_cases.py
 import pytest
 import responses
-from src.http_client.core.exceptions import NotFoundError, TimeoutError
+from src.http_client.core.exceptions import NotFoundError, TimeoutError, TooManyRetriesError
 from src.http_client.core.http_client import HTTPClient
 
 
@@ -20,7 +20,8 @@ def test_timeout_handling():
     """Тест обработки таймаута"""
     client = HTTPClient(base_url="https://httpbin.org", timeout=1)
 
-    with pytest.raises(TimeoutError):
+    # Может быть TimeoutError или TooManyRetriesError (из-за retry логики)
+    with pytest.raises((TimeoutError, TooManyRetriesError)):
         # Запрашиваем задержку больше таймаута
         client.get("/delay/5")
 

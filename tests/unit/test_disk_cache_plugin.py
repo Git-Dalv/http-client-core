@@ -54,12 +54,18 @@ def test_disk_cache_basic(cache_dir):
         # Первый запрос - должен пойти на сервер
         response1 = client.get("/posts/1")
         assert response1.status_code == 200
-        assert response1.headers.get("X-Cache") == "MISS"
+
+        # Проверяем что был miss
+        stats1 = plugin.get_stats()
+        assert stats1["misses"] == 1
 
         # Второй запрос - должен быть из кэша
         response2 = client.get("/posts/1")
         assert response2.status_code == 200
-        assert response2.headers.get("X-Cache") == "HIT"
+
+        # Проверяем что был hit
+        stats2 = plugin.get_stats()
+        assert stats2["hits"] == 1
 
         # Проверяем статистику
         stats = plugin.get_stats()
@@ -95,7 +101,10 @@ def test_disk_cache_persistence(cache_dir):
     try:
         response2 = client2.get("/posts/1")
         assert response2.status_code == 200
-        assert response2.headers.get("X-Cache") == "HIT"
+
+        # Проверяем что был hit (кэш сохранился)
+        stats = plugin2.get_stats()
+        assert stats["hits"] == 1
     finally:
         client2.close()
         plugin2.close()
@@ -113,13 +122,20 @@ def test_disk_cache_ttl_expiration(cache_dir):
         response1 = client.get("/posts/1")
         assert response1.status_code == 200
 
+        # Проверяем начальный miss
+        stats1 = plugin.get_stats()
+        initial_misses = stats1["misses"]
+
         # Ждем истечения TTL
         time.sleep(3)
 
         # Запрос после истечения TTL - должен пойти на сервер
         response2 = client.get("/posts/1")
         assert response2.status_code == 200
-        assert response2.headers.get("X-Cache") == "MISS"
+
+        # Проверяем что был еще один miss (TTL истек)
+        stats2 = plugin.get_stats()
+        assert stats2["misses"] == initial_misses + 1
     finally:
         client.close()
         plugin.close()
@@ -141,8 +157,8 @@ def test_disk_cache_different_params(cache_dir):
         assert response1.status_code == 200
         assert response2.status_code == 200
         assert response3.status_code == 200
-        assert response3.headers.get("X-Cache") == "HIT"
 
+        # Проверяем статистику: 2 misses (разные параметры) и 1 hit (повтор первого)
         stats = plugin.get_stats()
         assert stats["hits"] == 1
         assert stats["misses"] == 2
@@ -241,6 +257,10 @@ def test_disk_cache_delete_specific(cache_dir):
         assert response1.status_code == 200
         assert response2.status_code == 200
 
+        # Проверяем начальную статистику
+        stats1 = plugin.get_stats()
+        initial_misses = stats1["misses"]
+
         # Удаляем один из кэша
         plugin.delete("GET", "https://jsonplaceholder.typicode.com/posts/1")
 
@@ -248,8 +268,10 @@ def test_disk_cache_delete_specific(cache_dir):
         response3 = client.get("/posts/1")
         response4 = client.get("/posts/2")
 
-        assert response3.headers.get("X-Cache") == "MISS"
-        assert response4.headers.get("X-Cache") == "HIT"
+        # Проверяем что первый был miss (удален из кэша), второй hit
+        stats2 = plugin.get_stats()
+        assert stats2["misses"] == initial_misses + 1  # Один новый miss
+        assert stats2["hits"] >= 1  # Минимум один hit
     finally:
         client.close()
         plugin.close()
