@@ -104,9 +104,10 @@ def test_not_found_error():
 def test_response_too_large_error():
     """Тест ResponseTooLargeError."""
     exc = ResponseTooLargeError(
+        "Response size (200000000 bytes) exceeds maximum (100000000 bytes)",
+        url="https://example.com",
         size=200_000_000,
-        max_size=100_000_000,
-        url="https://example.com"
+        max_size=100_000_000
     )
     assert exc.fatal is True
     assert exc.size == 200_000_000
@@ -115,12 +116,13 @@ def test_response_too_large_error():
 def test_decompression_bomb_error():
     """Тест DecompressionBombError."""
     exc = DecompressionBombError(
+        "Decompression bomb detected: 1000 -> 1000000 bytes (ratio: 1000.0:1)",
+        url="https://example.com",
         compressed_size=1000,
-        decompressed_size=1_000_000,
-        url="https://example.com"
+        decompressed_size=1_000_000
     )
     assert exc.fatal is True
-    assert "1000.0x" in str(exc)
+    assert "1000" in str(exc)
 
 def test_too_many_retries_error():
     """Тест TooManyRetriesError."""

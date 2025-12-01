@@ -13,6 +13,8 @@ from .error_handler import ErrorHandler
 from .exceptions import (
     classify_requests_exception,
     TooManyRetriesError,
+    ResponseTooLargeError,
+    DecompressionBombError,
 )
 
 
@@ -368,6 +370,18 @@ class HTTPClient:
         # Build full URL
         url = self._build_url(endpoint)
 
+        # Add correlation ID for request tracing
+        import uuid
+        correlation_id = str(uuid.uuid4())
+
+        # Add to headers
+        if 'headers' not in kwargs:
+            kwargs['headers'] = {}
+
+        # Don't override if already set
+        if 'X-Correlation-ID' not in kwargs['headers']:
+            kwargs['headers']['X-Correlation-ID'] = correlation_id
+
         # Timeout
         timeout = kwargs.pop('timeout', self._config.timeout.as_tuple())
 
@@ -395,6 +409,70 @@ class HTTPClient:
 
                 # Check status
                 response.raise_for_status()
+
+                # Validate response size
+                content_length = response.headers.get('Content-Length')
+                if content_length:
+                    size = int(content_length)
+                    if size > self._config.security.max_response_size:
+                        raise ResponseTooLargeError(
+                            f"Response size ({size} bytes) exceeds maximum "
+                            f"({self._config.security.max_response_size} bytes)",
+                            url=url,
+                            size=size
+                        )
+
+                # Check actual content size (if Content-Length not present)
+                if len(response.content) > self._config.security.max_response_size:
+                    raise ResponseTooLargeError(
+                        f"Response size ({len(response.content)} bytes) exceeds maximum "
+                        f"({self._config.security.max_response_size} bytes)",
+                        url=url,
+                        size=len(response.content)
+                    )
+
+                # Check for decompression bomb (after size check)
+                if 'gzip' in response.headers.get('Content-Encoding', '').lower():
+                    compressed_size = len(response.content)
+                    # Try to get uncompressed size from response
+                    try:
+                        import gzip
+                        import io
+
+                        # Peek at decompressed size
+                        with gzip.GzipFile(fileobj=io.BytesIO(response.content)) as gz:
+                            # Read in chunks to avoid loading everything
+                            uncompressed_size = 0
+                            chunk_size = 8192
+                            while True:
+                                chunk = gz.read(chunk_size)
+                                if not chunk:
+                                    break
+                                uncompressed_size += len(chunk)
+
+                                # Check ratio on the fly
+                                if compressed_size > 0:
+                                    ratio = uncompressed_size / compressed_size
+                                    if ratio > 100:  # 100:1 compression ratio is suspicious
+                                        raise DecompressionBombError(
+                                            f"Potential decompression bomb detected: "
+                                            f"ratio {ratio:.1f}:1 (compressed: {compressed_size}, "
+                                            f"uncompressed: {uncompressed_size}+)",
+                                            url=url
+                                        )
+
+                                # Also check absolute size
+                                if uncompressed_size > self._config.security.max_decompressed_size:
+                                    raise DecompressionBombError(
+                                        f"Decompressed size ({uncompressed_size} bytes) exceeds maximum "
+                                        f"({self._config.security.max_decompressed_size} bytes)",
+                                        url=url
+                                    )
+                    except DecompressionBombError:
+                        raise
+                    except Exception:
+                        # If we can't check, proceed cautiously
+                        pass
 
                 # After response hooks
                 for plugin in self._plugins:
@@ -447,7 +525,7 @@ class HTTPClient:
                 # Log retry
                 attempt = self._retry_engine.attempt + 1
                 max_attempts = self._config.retry.max_attempts - 1  # Show as retries, not attempts
-                print(f"Retry {attempt}/{max_attempts} after {wait_time:.1f}s...")
+                print(f"[{correlation_id}] Retry {attempt}/{max_attempts} after {wait_time:.1f}s...")
 
                 # Wait
                 time.sleep(wait_time)
@@ -545,6 +623,105 @@ class HTTPClient:
             Объект Response
         """
         return self._request("OPTIONS", endpoint, **kwargs)
+
+    def download(
+        self,
+        endpoint: str,
+        file_path: str,
+        chunk_size: int = 8192,
+        show_progress: bool = False,
+        **kwargs
+    ) -> int:
+        """
+        Download large file with streaming to avoid memory issues.
+
+        Args:
+            endpoint: URL endpoint
+            file_path: Path to save file
+            chunk_size: Size of chunks to download (default 8KB)
+            show_progress: Show download progress (requires tqdm)
+            **kwargs: Additional request parameters
+
+        Returns:
+            Total bytes downloaded
+
+        Example:
+            >>> client = HTTPClient(base_url="https://example.com")
+            >>> bytes_downloaded = client.download("/large-file.zip", "output.zip")
+            >>> print(f"Downloaded {bytes_downloaded} bytes")
+        """
+        url = self._build_url(endpoint)
+
+        # Force stream mode
+        kwargs['stream'] = True
+
+        # Timeout
+        timeout = kwargs.pop('timeout', self._config.timeout.as_tuple())
+
+        # Make request
+        response = self._session.get(
+            url,
+            timeout=timeout,
+            verify=self._config.security.verify_ssl,
+            **kwargs
+        )
+
+        response.raise_for_status()
+
+        # Get total size if available
+        total_size = int(response.headers.get('Content-Length', 0))
+
+        # Check if exceeds limit
+        if total_size > self._config.security.max_response_size:
+            raise ResponseTooLargeError(
+                f"File size ({total_size} bytes) exceeds maximum "
+                f"({self._config.security.max_response_size} bytes)",
+                url=url,
+                size=total_size
+            )
+
+        # Download with progress
+        downloaded = 0
+
+        try:
+            if show_progress:
+                try:
+                    from tqdm import tqdm
+                    progress_bar = tqdm(total=total_size, unit='B', unit_scale=True)
+                except ImportError:
+                    progress_bar = None
+                    print("Install tqdm for progress bar: pip install tqdm")
+            else:
+                progress_bar = None
+
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:  # Filter out keep-alive chunks
+                        f.write(chunk)
+                        downloaded += len(chunk)
+
+                        if progress_bar:
+                            progress_bar.update(len(chunk))
+
+                        # Check size limit
+                        if downloaded > self._config.security.max_response_size:
+                            raise ResponseTooLargeError(
+                                f"Downloaded size ({downloaded} bytes) exceeds maximum",
+                                url=url,
+                                size=downloaded
+                            )
+
+            if progress_bar:
+                progress_bar.close()
+
+            return downloaded
+
+        except Exception as e:
+            # Clean up partial file
+            import os
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise
 
     # ==================== Свойства ====================
 
