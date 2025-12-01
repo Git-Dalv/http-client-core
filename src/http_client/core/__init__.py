@@ -1,4 +1,4 @@
-"""Core HTTP Client <>4C;8."""
+"""Core HTTP Client модули."""
 
 from .config import (
     TimeoutConfig,
@@ -7,6 +7,7 @@ from .config import (
     SecurityConfig,
     HTTPClientConfig,
 )
+from .retry_engine import RetryEngine
 from .exceptions import (
     HTTPClientException,
     TemporaryError,
@@ -30,6 +31,8 @@ from .exceptions import (
     ConfigurationError,
     classify_requests_exception,
 )
+from .http_client import HTTPClient
+from .error_handler import ErrorHandler
 
 __all__ = [
     # Config
@@ -38,6 +41,11 @@ __all__ = [
     "ConnectionPoolConfig",
     "SecurityConfig",
     "HTTPClientConfig",
+    # Retry
+    "RetryEngine",
+    # Core
+    "HTTPClient",
+    "ErrorHandler",
     # Exceptions
     "HTTPClientException",
     "TemporaryError",
