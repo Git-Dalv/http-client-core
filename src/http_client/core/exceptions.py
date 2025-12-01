@@ -343,7 +343,7 @@ def classify_requests_exception(
 
     elif isinstance(exc, requests.exceptions.HTTPError):
         response = exc.response
-        status_code = response.status_code if response else 0
+        status_code = response.status_code if response is not None else 0
 
         if 400 <= status_code < 500:
             # 4xx - фатальные

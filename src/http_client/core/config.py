@@ -193,6 +193,14 @@ class HTTPClientConfig:
     pool: ConnectionPoolConfig = field(default_factory=ConnectionPoolConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
 
+    def __post_init__(self):
+        """Normalize base_url by removing trailing slashes."""
+        if self.base_url:
+            # Remove trailing slashes
+            normalized = self.base_url.rstrip('/')
+            if normalized != self.base_url:
+                object.__setattr__(self, 'base_url', normalized)
+
     @classmethod
     def create(
         cls,
@@ -242,7 +250,9 @@ class HTTPClientConfig:
             timeout_cfg = TimeoutConfig(connect=5, read=timeout)
 
         # Retry конфигурация
-        retry_cfg = RetryConfig(max_attempts=max_retries)
+        # max_retries = количество ретраев (не включая оригинальный запрос)
+        # max_attempts = общее количество попыток (включая оригинальный)
+        retry_cfg = RetryConfig(max_attempts=max_retries + 1)
 
         # Security конфигурация
         security_cfg = SecurityConfig(verify_ssl=verify_ssl)
@@ -287,12 +297,12 @@ class HTTPClientConfig:
             security=self.security
         )
 
-    def with_retries(self, max_retries: int) -> 'HTTPClientConfig':
+    def with_retries(self, max_attempts: int) -> 'HTTPClientConfig':
         """
         Создать новый конфиг с изменённым retry.
 
         Args:
-            max_retries: Количество попыток
+            max_attempts: Максимальное количество попыток (включая оригинальный запрос)
 
         Returns:
             Новый HTTPClientConfig
@@ -300,7 +310,7 @@ class HTTPClientConfig:
         Example:
             >>> new_config = config.with_retries(5)
         """
-        retry_cfg = RetryConfig(max_attempts=max_retries)
+        retry_cfg = RetryConfig(max_attempts=max_attempts)
 
         return HTTPClientConfig(
             base_url=self.base_url,

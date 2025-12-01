@@ -14,6 +14,7 @@ from src.http_client.core.exceptions import (
     HTTPClientException,
     NotFoundError,
     TimeoutError,
+    TooManyRetriesError,
 )
 from src.http_client.core.http_client import HTTPClient
 from src.http_client.plugins.plugin import Plugin
@@ -251,8 +252,11 @@ class TestHTTPClientErrorHandling:
             body=requests_lib.exceptions.ConnectionError()
         )
 
-        with pytest.raises(ConnectionError):
+        with pytest.raises(TooManyRetriesError) as exc_info:
             client.get("/error")
+
+        # Verify the last error is ConnectionError
+        assert isinstance(exc_info.value.last_error, ConnectionError)
 
     @responses.activate
     def test_timeout_error(self, client):
@@ -261,8 +265,11 @@ class TestHTTPClientErrorHandling:
             responses.GET, "https://api.example.com/slow", body=requests_lib.exceptions.Timeout()
         )
 
-        with pytest.raises(TimeoutError):
+        with pytest.raises(TooManyRetriesError) as exc_info:
             client.get("/slow")
+
+        # Verify the last error is TimeoutError
+        assert isinstance(exc_info.value.last_error, TimeoutError)
 
 
 class TestHTTPClientPlugins:

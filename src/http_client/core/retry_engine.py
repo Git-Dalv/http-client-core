@@ -55,8 +55,8 @@ class RetryEngine:
         Returns:
             True если нужен retry
         """
-        # Проверка лимита попыток
-        if self._attempt >= self.config.max_attempts:
+        # Проверка лимита попыток (проверяем, не превысит ли следующая попытка лимит)
+        if self._attempt + 1 >= self.config.max_attempts:
             return False
 
         # Проверка идемпотентности
