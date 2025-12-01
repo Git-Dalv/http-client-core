@@ -243,10 +243,16 @@ class TestHTTPClientErrorHandling:
         with pytest.raises(HTTPClientException):
             client.get("/error")
 
+    @responses.activate
     def test_connection_error(self, client):
         """Test connection error handling."""
+        responses.add(
+            responses.GET, "https://api.example.com/error",
+            body=requests_lib.exceptions.ConnectionError()
+        )
+
         with pytest.raises(ConnectionError):
-            client.get("http://invalid-domain-that-does-not-exist-12345.com/test")
+            client.get("/error")
 
     @responses.activate
     def test_timeout_error(self, client):

@@ -13,7 +13,8 @@ from src.http_client.core.exceptions import (
     ServerError,
     TimeoutError,
     UnauthorizedError,
-    HTTPError
+    HTTPError,
+    TemporaryError
 )
 
 
@@ -73,10 +74,11 @@ class TestTimeoutError:
 
     def test_timeout_error_with_timeout_value(self):
         """Test TimeoutError with timeout value."""
-        exc = TimeoutError("Timeout", "https://example.com", 30)
+        exc = TimeoutError("Timeout", "https://example.com", timeout=30, timeout_type="read")
         message = str(exc)
         assert "https://example.com" in message
         assert "30" in message
+        assert "read timeout" in message
 
 
 class TestNotFoundError:
@@ -145,6 +147,7 @@ class TestServerError:
         assert isinstance(exc, ServerError)
 
     def test_server_error_inheritance(self):
-        """Test ServerError inherits from HTTPClientException."""
+        """Test ServerError inherits from TemporaryError."""
         exc = ServerError(500, "https://example.com", "Test")
-        assert isinstance(exc, HTTPError)
+        assert isinstance(exc, TemporaryError)
+        assert exc.retryable is True
