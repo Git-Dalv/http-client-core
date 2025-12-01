@@ -7,8 +7,8 @@ from unittest.mock import Mock, patch, MagicMock
 import requests
 import time
 
-from http_client.plugins.proxy_pool_plugin import ProxyPoolPlugin
-from http_client.utils.proxy_manager import ProxyPool, ProxyInfo
+from src.http_client.plugins.proxy_pool_plugin import ProxyPoolPlugin
+from src.http_client.utils.proxy_manager import ProxyPool, ProxyInfo
 
 
 class TestProxyPoolPluginInit:

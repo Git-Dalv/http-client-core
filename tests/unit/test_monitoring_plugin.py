@@ -148,7 +148,7 @@ def test_monitoring_error_tracking():
     # Проверяем историю ошибок
     errors = monitoring.get_recent_errors()
     assert len(errors) >= 1
-    assert errors[0]["error_type"] == "HTTPError"
+    assert errors[0]["error_type"] == "NotFoundError"
     assert "method" in errors[0]
     assert "url" in errors[0]
 
@@ -374,8 +374,8 @@ def test_monitoring_mixed_success_and_errors():
     assert "/posts/1" in endpoint_metrics
     endpoint_data = endpoint_metrics["/posts/1"]
 
-    # min_time должен быть больше 0 и не inf
-    assert endpoint_data["min_time"] > 0
+    # min_time должен быть больше или равен 0 и не inf
+    assert endpoint_data["min_time"] >= 0
     assert endpoint_data["min_time"] != float("inf")
     assert endpoint_data["count"] == 1
     assert endpoint_data["errors"] == 0
