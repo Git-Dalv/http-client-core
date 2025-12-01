@@ -1,6 +1,7 @@
 # src/http_client/core/http_client.py
 from typing import Any, Dict, List, Optional
 import time
+import warnings
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -41,11 +42,37 @@ class HTTPClient:
         Initialize HTTP client.
 
         Args:
-            base_url: Base URL (deprecated, use config)
+            base_url: Base URL (deprecated, use config.base_url)
             config: HTTPClientConfig instance
             plugins: List of plugins
-            **kwargs: Config parameters (если config=None)
+            **kwargs: Config parameters (deprecated, use config object)
+
+        Deprecated Parameters:
+            max_retries: Use config.retry.max_attempts instead
+            verify_ssl: Use config.security.verify_ssl instead
+            pool_connections: Use config.pool.pool_connections instead
+            pool_maxsize: Use config.pool.pool_maxsize instead
+            max_redirects: Use config.pool.max_redirects instead
         """
+        # Check for deprecated parameters
+        deprecated_params = {
+            'max_retries': 'config.retry.max_attempts',
+            'verify_ssl': 'config.security.verify_ssl',
+            'max_redirects': 'config.pool.max_redirects',
+            'pool_connections': 'config.pool.pool_connections',
+            'pool_maxsize': 'config.pool.pool_maxsize',
+            'pool_block': 'config.pool.pool_block',
+        }
+
+        for param, replacement in deprecated_params.items():
+            if param in kwargs:
+                warnings.warn(
+                    f"Parameter '{param}' is deprecated. Use '{replacement}' instead. "
+                    f"This parameter will be removed in version 2.0.0",
+                    DeprecationWarning,
+                    stacklevel=2
+                )
+
         # Создать конфиг
         if config is None:
             config = HTTPClientConfig.create(base_url=base_url, **kwargs)

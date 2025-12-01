@@ -1,11 +1,75 @@
-"""HTTP Client library."""
+"""HTTP Client Library - Production-ready HTTP client with plugins."""
 
 from .core.http_client import HTTPClient
-from .core.config import HTTPClientConfig
-from .core.exceptions import HTTPClientException
+from .core.config import (
+    HTTPClientConfig,
+    TimeoutConfig,
+    RetryConfig,
+    ConnectionPoolConfig,
+    SecurityConfig,
+)
+from .core.exceptions import (
+    HTTPClientException,
+    HTTPError,
+    TimeoutError,
+    ConnectionError,
+    NotFoundError,
+    BadRequestError,
+    UnauthorizedError,
+    ForbiddenError,
+    ServerError,
+    TooManyRetriesError,
+    ResponseTooLargeError,
+    DecompressionBombError,
+)
+from .plugins.plugin import Plugin as BasePlugin
+from .plugins.logging_plugin import LoggingPlugin
+from .plugins.retry_plugin import RetryPlugin
+from .plugins.monitoring_plugin import MonitoringPlugin
+from .plugins.cache_plugin import CachePlugin
+from .plugins.rate_limit_plugin import RateLimitPlugin
+from .plugins.auth_plugin import AuthPlugin
 
+# Version info
+__version__ = "1.0.0"
+__author__ = "HTTP Client Contributors"
+__license__ = "MIT"
+
+# All public exports
 __all__ = [
+    # Core
     "HTTPClient",
+
+    # Config
     "HTTPClientConfig",
+    "TimeoutConfig",
+    "RetryConfig",
+    "ConnectionPoolConfig",
+    "SecurityConfig",
+
+    # Exceptions
     "HTTPClientException",
+    "HTTPError",
+    "TimeoutError",
+    "ConnectionError",
+    "NotFoundError",
+    "BadRequestError",
+    "UnauthorizedError",
+    "ForbiddenError",
+    "ServerError",
+    "TooManyRetriesError",
+    "ResponseTooLargeError",
+    "DecompressionBombError",
+
+    # Plugins
+    "BasePlugin",
+    "LoggingPlugin",
+    "RetryPlugin",
+    "MonitoringPlugin",
+    "CachePlugin",
+    "RateLimitPlugin",
+    "AuthPlugin",
+
+    # Version
+    "__version__",
 ]
