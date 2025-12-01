@@ -212,6 +212,10 @@ class HTTPClientConfig:
         verify_ssl: bool = True,
         headers: Optional[Dict[str, str]] = None,
         proxies: Optional[Dict[str, str]] = None,
+        pool_connections: Optional[int] = None,
+        pool_maxsize: Optional[int] = None,
+        pool_block: Optional[bool] = None,
+        max_redirects: Optional[int] = None,
         **kwargs
     ) -> 'HTTPClientConfig':
         """
@@ -226,6 +230,10 @@ class HTTPClientConfig:
             verify_ssl: Проверять SSL
             headers: Заголовки
             proxies: Прокси
+            pool_connections: Количество connection pool connections
+            pool_maxsize: Максимальный размер connection pool
+            pool_block: Блокировать ли при достижении лимита pool
+            max_redirects: Максимальное количество редиректов
 
         Returns:
             HTTPClientConfig instance
@@ -254,6 +262,19 @@ class HTTPClientConfig:
         # max_attempts = общее количество попыток (включая оригинальный)
         retry_cfg = RetryConfig(max_attempts=max_retries + 1)
 
+        # Pool конфигурация
+        pool_kwargs = {}
+        if pool_connections is not None:
+            pool_kwargs['pool_connections'] = pool_connections
+        if pool_maxsize is not None:
+            pool_kwargs['pool_maxsize'] = pool_maxsize
+        if pool_block is not None:
+            pool_kwargs['pool_block'] = pool_block
+        if max_redirects is not None:
+            pool_kwargs['max_redirects'] = max_redirects
+
+        pool_cfg = ConnectionPoolConfig(**pool_kwargs) if pool_kwargs else ConnectionPoolConfig()
+
         # Security конфигурация
         security_cfg = SecurityConfig(verify_ssl=verify_ssl)
 
@@ -263,6 +284,7 @@ class HTTPClientConfig:
             proxies=proxies or {},
             timeout=timeout_cfg,
             retry=retry_cfg,
+            pool=pool_cfg,
             security=security_cfg,
             **kwargs
         )

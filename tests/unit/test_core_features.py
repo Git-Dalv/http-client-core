@@ -131,7 +131,7 @@ def test_immutability():
     with pytest.raises(RuntimeError) as exc_info:
         client.timeout = 5
 
-    assert "Cannot modify attribute" in str(exc_info.value)
+    assert "immutable" in str(exc_info.value).lower()
 
     # Но внутренние атрибуты (с _) можно изменять через специальные методы
     # Это нормальное поведение

@@ -178,17 +178,27 @@ class MonitoringPlugin(Plugin):
         """Устаревший метод. Используйте after_response."""
         return self.after_response(response)
 
-    def on_error(self, exception: Exception, **kwargs: Any) -> bool:
+    def on_error(self, error: Exception = None, **kwargs: Any) -> bool:
         """
         Обработчик ошибок - отслеживает неудачные запросы.
 
         Args:
-            exception: Исключение которое произошло
-            **kwargs: Дополнительные параметры (method, url, и т.д.)
+            error: Исключение которое произошло
+            **kwargs: Дополнительные параметры (method, url, exception и т.д.)
 
         Returns:
             False - не повторять запрос, просто логировать
         """
+        # Поддержка старого API (exception) и нового (error)
+        if error is None and 'exception' in kwargs:
+            error = kwargs['exception']
+
+        if error is None:
+            return False
+
+        # Для обратной совместимости также используем exception
+        exception = error
+
         with self._lock:
             self._total_requests += 1
             self._failed_requests += 1
