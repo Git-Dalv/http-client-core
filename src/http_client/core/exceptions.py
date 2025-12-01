@@ -226,50 +226,40 @@ class ResponseTooLargeError(FatalError):
     Ответ слишком большой.
 
     Args:
-        size: Размер ответа (bytes)
-        max_size: Максимально допустимый размер
+        message: Сообщение об ошибке
         url: URL
+        size: Размер ответа (bytes)
+        max_size: Максимально допустимый размер (optional)
     """
 
-    def __init__(self, size: int, max_size: int, url: str):
+    def __init__(self, message: str, url: Optional[str] = None, size: Optional[int] = None, max_size: Optional[int] = None):
         self.size = size
         self.max_size = max_size
         self.url = url
-
-        msg = (
-            f"Response too large: {size} bytes "
-            f"(max: {max_size}) for {url}"
-        )
-        super().__init__(msg)
+        super().__init__(message)
 
 class DecompressionBombError(FatalError):
     """
     Decompression bomb detected.
 
     Args:
-        compressed_size: Размер сжатых данных
-        decompressed_size: Размер распакованных данных
-        url: URL
+        message: Сообщение об ошибке
+        url: URL (optional)
+        compressed_size: Размер сжатых данных (optional)
+        decompressed_size: Размер распакованных данных (optional)
     """
 
     def __init__(
         self,
-        compressed_size: int,
-        decompressed_size: int,
-        url: str
+        message: str,
+        url: Optional[str] = None,
+        compressed_size: Optional[int] = None,
+        decompressed_size: Optional[int] = None
     ):
         self.compressed_size = compressed_size
         self.decompressed_size = decompressed_size
         self.url = url
-
-        ratio = decompressed_size / compressed_size if compressed_size > 0 else 0
-
-        msg = (
-            f"Decompression bomb detected for {url}: "
-            f"{compressed_size} -> {decompressed_size} bytes "
-            f"(ratio: {ratio:.1f}x)"
-        )
-        super().__init__(msg)
+        super().__init__(message)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # СПЕЦИАЛЬНЫЕ
