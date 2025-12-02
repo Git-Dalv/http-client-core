@@ -5,7 +5,10 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, List, Dict, Set, Union
+from typing import Optional, Tuple, List, Dict, Set, Union, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .logging import LoggingConfig
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # TIMEOUT CONFIG
@@ -192,6 +195,7 @@ class HTTPClientConfig:
     retry: RetryConfig = field(default_factory=RetryConfig)
     pool: ConnectionPoolConfig = field(default_factory=ConnectionPoolConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
+    logging: Optional['LoggingConfig'] = None  # Logging configuration (None = no logging)
 
     def __post_init__(self):
         """Normalize base_url by removing trailing slashes."""
@@ -216,6 +220,7 @@ class HTTPClientConfig:
         pool_maxsize: Optional[int] = None,
         pool_block: Optional[bool] = None,
         max_redirects: Optional[int] = None,
+        logging: Optional['LoggingConfig'] = None,
         **kwargs
     ) -> 'HTTPClientConfig':
         """
@@ -234,6 +239,7 @@ class HTTPClientConfig:
             pool_maxsize: Максимальный размер connection pool
             pool_block: Блокировать ли при достижении лимита pool
             max_redirects: Максимальное количество редиректов
+            logging: Конфигурация логирования (None = отключить логирование)
 
         Returns:
             HTTPClientConfig instance
@@ -286,6 +292,7 @@ class HTTPClientConfig:
             retry=retry_cfg,
             pool=pool_cfg,
             security=security_cfg,
+            logging=logging,
             **kwargs
         )
 
@@ -316,7 +323,8 @@ class HTTPClientConfig:
             timeout=timeout_cfg,
             retry=self.retry,
             pool=self.pool,
-            security=self.security
+            security=self.security,
+            logging=self.logging
         )
 
     def with_retries(self, max_attempts: int) -> 'HTTPClientConfig':
@@ -341,5 +349,6 @@ class HTTPClientConfig:
             timeout=self.timeout,
             retry=retry_cfg,
             pool=self.pool,
-            security=self.security
+            security=self.security,
+            logging=self.logging
         )
