@@ -1,9 +1,13 @@
 # src/http_client/core/http_client.py
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 import time
 import warnings
+import uuid
 
 import requests
+
+if TYPE_CHECKING:
+    from .logging import HTTPClientLogger
 from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
 
@@ -82,6 +86,26 @@ class HTTPClient:
         object.__setattr__(self, '_retry_engine', RetryEngine(config.retry))
         object.__setattr__(self, '_error_handler', ErrorHandler())
         object.__setattr__(self, '_plugins', list(plugins) if plugins else [])
+
+        # Initialize logger if logging config provided
+        logger_instance: Optional['HTTPClientLogger'] = None
+        if config.logging:
+            from .logging import HTTPClientLogger
+            # Use base_url in logger name for uniqueness
+            logger_name = "http_client"
+            if config.base_url:
+                # Extract domain from base_url
+                from urllib.parse import urlparse
+                parsed = urlparse(config.base_url)
+                domain = parsed.netloc or parsed.path.split('/')[0]
+                logger_name = f"http_client.{domain}"
+
+            logger_instance = HTTPClientLogger(
+                config=config.logging,
+                name=logger_name
+            )
+        object.__setattr__(self, '_logger', logger_instance)
+
         object.__setattr__(self, '_session', self._create_session())
 
         # Backward compatibility attributes
@@ -397,168 +421,244 @@ class HTTPClient:
         # Build full URL
         url = self._build_url(endpoint)
 
-        # Add correlation ID for request tracing
-        import uuid
-        correlation_id = str(uuid.uuid4())
-
-        # Add to headers
+        # Get or create correlation ID for request tracing
         if 'headers' not in kwargs:
             kwargs['headers'] = {}
 
-        # Don't override if already set
-        if 'X-Correlation-ID' not in kwargs['headers']:
+        correlation_id = kwargs['headers'].get('X-Correlation-ID')
+        if not correlation_id:
+            correlation_id = str(uuid.uuid4())
             kwargs['headers']['X-Correlation-ID'] = correlation_id
+
+        # Set correlation ID in logging context
+        if self._logger:
+            from .logging.filters import set_correlation_id
+            set_correlation_id(correlation_id)
+            self._logger.debug(
+                "Request initialized",
+                method=method,
+                url=url,
+                correlation_id=correlation_id,
+                has_json="json" in kwargs,
+                has_data="data" in kwargs
+            )
+
+        # Start timing
+        start_time = time.time()
 
         # Timeout
         timeout = kwargs.pop('timeout', self._config.timeout.as_tuple())
 
+        # Log request started
+        if self._logger:
+            self._logger.info(
+                "Request started",
+                method=method,
+                url=url,
+                correlation_id=correlation_id,
+                timeout=self._config.timeout.total if self._config.timeout.total else self._config.timeout.read,
+                max_retries=self._config.retry.max_attempts - 1
+            )
+
         # Retry loop
         last_error = None
+        attempt = 0
 
-        while True:
-            try:
-                # Before request hooks
-                for plugin in self._plugins:
-                    try:
-                        plugin.before_request(method=method, url=url, **kwargs)
-                    except Exception as e:
-                        print(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
+        try:
+            while True:
+                attempt += 1
 
-                # Make request
-                response = self._session.request(
-                    method=method,
-                    url=url,
-                    timeout=timeout,
-                    verify=self._config.security.verify_ssl,
-                    allow_redirects=self._config.security.allow_redirects,
-                    **kwargs
-                )
-
-                # Check status
-                response.raise_for_status()
-
-                # Validate response size
-                content_length = response.headers.get('Content-Length')
-                if content_length:
-                    size = int(content_length)
-                    if size > self._config.security.max_response_size:
-                        raise ResponseTooLargeError(
-                            f"Response size ({size} bytes) exceeds maximum "
-                            f"({self._config.security.max_response_size} bytes)",
-                            url=url,
-                            size=size
-                        )
-
-                # Check actual content size (if Content-Length not present)
-                if len(response.content) > self._config.security.max_response_size:
-                    raise ResponseTooLargeError(
-                        f"Response size ({len(response.content)} bytes) exceeds maximum "
-                        f"({self._config.security.max_response_size} bytes)",
+                # Log retry attempt (if not first)
+                if attempt > 1 and self._logger:
+                    self._logger.warning(
+                        "Retrying request",
+                        method=method,
                         url=url,
-                        size=len(response.content)
+                        attempt=attempt,
+                        max_attempts=self._config.retry.max_attempts,
+                        correlation_id=correlation_id
                     )
 
-                # Check for decompression bomb (after size check)
-                if 'gzip' in response.headers.get('Content-Encoding', '').lower():
-                    compressed_size = len(response.content)
-                    # Try to get uncompressed size from response
-                    try:
-                        import gzip
-                        import io
+                try:
+                    # Before request hooks
+                    for plugin in self._plugins:
+                        try:
+                            plugin.before_request(method=method, url=url, **kwargs)
+                        except Exception as e:
+                            print(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
 
-                        # Peek at decompressed size
-                        with gzip.GzipFile(fileobj=io.BytesIO(response.content)) as gz:
-                            # Read in chunks to avoid loading everything
-                            uncompressed_size = 0
-                            chunk_size = 8192
-                            while True:
-                                chunk = gz.read(chunk_size)
-                                if not chunk:
-                                    break
-                                uncompressed_size += len(chunk)
+                    # Make request
+                    response = self._session.request(
+                        method=method,
+                        url=url,
+                        timeout=timeout,
+                        verify=self._config.security.verify_ssl,
+                        allow_redirects=self._config.security.allow_redirects,
+                        **kwargs
+                    )
 
-                                # Check ratio on the fly
-                                if compressed_size > 0:
-                                    ratio = uncompressed_size / compressed_size
-                                    if ratio > 100:  # 100:1 compression ratio is suspicious
+                    # Check status
+                    response.raise_for_status()
+
+                    # Validate response size
+                    content_length = response.headers.get('Content-Length')
+                    if content_length:
+                        size = int(content_length)
+                        if size > self._config.security.max_response_size:
+                            raise ResponseTooLargeError(
+                                f"Response size ({size} bytes) exceeds maximum "
+                                f"({self._config.security.max_response_size} bytes)",
+                                url=url,
+                                size=size
+                            )
+
+                    # Check actual content size (if Content-Length not present)
+                    if len(response.content) > self._config.security.max_response_size:
+                        raise ResponseTooLargeError(
+                            f"Response size ({len(response.content)} bytes) exceeds maximum "
+                            f"({self._config.security.max_response_size} bytes)",
+                            url=url,
+                            size=len(response.content)
+                        )
+
+                    # Check for decompression bomb (after size check)
+                    if 'gzip' in response.headers.get('Content-Encoding', '').lower():
+                        compressed_size = len(response.content)
+                        # Try to get uncompressed size from response
+                        try:
+                            import gzip
+                            import io
+
+                            # Peek at decompressed size
+                            with gzip.GzipFile(fileobj=io.BytesIO(response.content)) as gz:
+                                # Read in chunks to avoid loading everything
+                                uncompressed_size = 0
+                                chunk_size = 8192
+                                while True:
+                                    chunk = gz.read(chunk_size)
+                                    if not chunk:
+                                        break
+                                    uncompressed_size += len(chunk)
+
+                                    # Check ratio on the fly
+                                    if compressed_size > 0:
+                                        ratio = uncompressed_size / compressed_size
+                                        if ratio > 100:  # 100:1 compression ratio is suspicious
+                                            raise DecompressionBombError(
+                                                f"Potential decompression bomb detected: "
+                                                f"ratio {ratio:.1f}:1 (compressed: {compressed_size}, "
+                                                f"uncompressed: {uncompressed_size}+)",
+                                                url=url
+                                            )
+
+                                    # Also check absolute size
+                                    if uncompressed_size > self._config.security.max_decompressed_size:
                                         raise DecompressionBombError(
-                                            f"Potential decompression bomb detected: "
-                                            f"ratio {ratio:.1f}:1 (compressed: {compressed_size}, "
-                                            f"uncompressed: {uncompressed_size}+)",
+                                            f"Decompressed size ({uncompressed_size} bytes) exceeds maximum "
+                                            f"({self._config.security.max_decompressed_size} bytes)",
                                             url=url
                                         )
+                        except DecompressionBombError:
+                            raise
+                        except Exception:
+                            # If we can't check, proceed cautiously
+                            pass
 
-                                # Also check absolute size
-                                if uncompressed_size > self._config.security.max_decompressed_size:
-                                    raise DecompressionBombError(
-                                        f"Decompressed size ({uncompressed_size} bytes) exceeds maximum "
-                                        f"({self._config.security.max_decompressed_size} bytes)",
-                                        url=url
-                                    )
-                    except DecompressionBombError:
-                        raise
-                    except Exception:
-                        # If we can't check, proceed cautiously
-                        pass
+                    # After response hooks
+                    for plugin in self._plugins:
+                        try:
+                            plugin.after_response(response=response)
+                        except Exception as e:
+                            print(f"Plugin {plugin.__class__.__name__} error in after_response: {e}")
 
-                # After response hooks
-                for plugin in self._plugins:
-                    try:
-                        plugin.after_response(response=response)
-                    except Exception as e:
-                        print(f"Plugin {plugin.__class__.__name__} error in after_response: {e}")
+                    # Success - reset retry counter
+                    self._retry_engine.reset()
 
-                # Success - reset retry counter
-                self._retry_engine.reset()
-
-                return response
-
-            except requests.exceptions.RequestException as e:
-                # Classify error
-                our_error = classify_requests_exception(e, url)
-                last_error = our_error
-
-                # Get response if exists
-                response = getattr(e, 'response', None)
-
-                # Error hooks
-                for plugin in self._plugins:
-                    try:
-                        plugin.on_error(
-                            error=our_error,
+                    # Log successful response
+                    if self._logger:
+                        duration_ms = round((time.time() - start_time) * 1000, 2)
+                        self._logger.info(
+                            "Request completed",
                             method=method,
                             url=url,
-                            response=response
+                            status_code=response.status_code,
+                            duration_ms=duration_ms,
+                            attempt=attempt,
+                            response_size=len(response.content),
+                            correlation_id=correlation_id
                         )
-                    except Exception as plugin_error:
-                        print(f"Plugin {plugin.__class__.__name__} error in on_error: {plugin_error}")
 
-                # Check if should retry
-                if not self._retry_engine.should_retry(method, our_error, response):
-                    # Check if it's because we hit max attempts
-                    if self._retry_engine.attempt + 1 >= self._config.retry.max_attempts:
-                        raise TooManyRetriesError(
-                            max_retries=self._config.retry.max_attempts - 1,  # Convert attempts to retries
-                            last_error=last_error,
-                            url=url
+                    return response
+
+                except requests.exceptions.RequestException as e:
+                    # Classify error
+                    our_error = classify_requests_exception(e, url)
+                    last_error = our_error
+
+                    # Get response if exists
+                    response = getattr(e, 'response', None)
+
+                    # Log error
+                    is_last_attempt = (self._retry_engine.attempt + 1 >= self._config.retry.max_attempts)
+                    if self._logger:
+                        duration_ms = round((time.time() - start_time) * 1000, 2)
+                        log_method = self._logger.error if is_last_attempt else self._logger.warning
+                        log_method(
+                            "Request failed" if is_last_attempt else "Request error (will retry)",
+                            method=method,
+                            url=url,
+                            error=str(our_error),
+                            error_type=type(our_error).__name__,
+                            attempt=attempt,
+                            max_attempts=self._config.retry.max_attempts,
+                            duration_ms=duration_ms,
+                            correlation_id=correlation_id
                         )
-                    else:
-                        # It's a fatal error or non-idempotent method
-                        raise our_error
 
-                # Get wait time
-                wait_time = self._retry_engine.get_wait_time(our_error, response)
+                    # Error hooks
+                    for plugin in self._plugins:
+                        try:
+                            plugin.on_error(
+                                error=our_error,
+                                method=method,
+                                url=url,
+                                response=response
+                            )
+                        except Exception as plugin_error:
+                            print(f"Plugin {plugin.__class__.__name__} error in on_error: {plugin_error}")
 
-                # Log retry
-                attempt = self._retry_engine.attempt + 1
-                max_attempts = self._config.retry.max_attempts - 1  # Show as retries, not attempts
-                print(f"[{correlation_id}] Retry {attempt}/{max_attempts} after {wait_time:.1f}s...")
+                    # Check if should retry
+                    if not self._retry_engine.should_retry(method, our_error, response):
+                        # Check if it's because we hit max attempts
+                        if self._retry_engine.attempt + 1 >= self._config.retry.max_attempts:
+                            raise TooManyRetriesError(
+                                max_retries=self._config.retry.max_attempts - 1,  # Convert attempts to retries
+                                last_error=last_error,
+                                url=url
+                            )
+                        else:
+                            # It's a fatal error or non-idempotent method
+                            raise our_error
 
-                # Wait
-                time.sleep(wait_time)
+                    # Get wait time
+                    wait_time = self._retry_engine.get_wait_time(our_error, response)
 
-                # Increment
-                self._retry_engine.increment()
+                    # Log retry
+                    attempt = self._retry_engine.attempt + 1
+                    max_attempts = self._config.retry.max_attempts - 1  # Show as retries, not attempts
+                    print(f"[{correlation_id}] Retry {attempt}/{max_attempts} after {wait_time:.1f}s...")
+
+                    # Wait
+                    time.sleep(wait_time)
+
+                    # Increment
+                    self._retry_engine.increment()
+
+        finally:
+            # Clear correlation ID from logging context
+            if self._logger:
+                from .logging.filters import clear_correlation_id
+                clear_correlation_id()
 
     def get(self, endpoint: str, **kwargs: Any) -> requests.Response:
         """

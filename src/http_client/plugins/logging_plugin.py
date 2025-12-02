@@ -14,6 +14,18 @@ logger = logging.getLogger(__name__)
 class LoggingPlugin(Plugin):
     """Плагин для логирования HTTP запросов и ответов"""
 
+    def __init__(self):
+        """Initialize the logging plugin."""
+        import warnings
+        warnings.warn(
+            "LoggingPlugin is deprecated and will be removed in v2.0.0. "
+            "Use HTTPClientConfig.logging instead. "
+            "Example: config = HTTPClientConfig.create(logging=LoggingConfig.create(...))",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        super().__init__()
+
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         logger.info(f"Sending {method} request to {url}")
         if kwargs.get("json"):
