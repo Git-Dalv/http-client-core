@@ -51,8 +51,9 @@ class TestHTTPClientInit:
         assert client._proxies == proxies
         client.close()
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     def test_client_init_with_verify_ssl_false(self, base_url):
-        """Test initialization with SSL verification disabled."""
+        """Test initialization with SSL verification disabled (using deprecated verify_ssl parameter)."""
         client = HTTPClient(base_url=base_url, verify_ssl=False)
         assert client._verify_ssl is False
         client.close()
@@ -251,8 +252,9 @@ class TestHTTPClientErrorHandling:
 class TestHTTPClientPlugins:
     """Test plugin system."""
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     def test_add_plugin(self, base_url):
-        """Test adding a plugin."""
+        """Test adding a plugin (using deprecated LoggingPlugin for backward compatibility)."""
         client = HTTPClient(base_url=base_url)
         plugin = LoggingPlugin()
 
@@ -261,8 +263,9 @@ class TestHTTPClientPlugins:
         assert plugin in client._plugins
         client.close()
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     def test_remove_plugin(self, base_url):
-        """Test removing a plugin."""
+        """Test removing a plugin (using deprecated LoggingPlugin for backward compatibility)."""
         client = HTTPClient(base_url=base_url)
         plugin = LoggingPlugin()
 
@@ -272,9 +275,10 @@ class TestHTTPClientPlugins:
         assert plugin not in client._plugins
         client.close()
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     @responses.activate
     def test_plugin_hooks_called(self, base_url):
-        """Test that plugin hooks are called."""
+        """Test that plugin hooks are called (using deprecated LoggingPlugin for backward compatibility)."""
         responses.add(responses.GET, f"{base_url}/test", json={"ok": True}, status=200)
 
         plugin = LoggingPlugin()
