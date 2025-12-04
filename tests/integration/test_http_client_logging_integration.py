@@ -35,28 +35,31 @@ class TestHTTPClientLoggingIntegration:
             )
 
             client = HTTPClient(config=config)
-            response = client.get("/get")
+            try:
+                response = client.get("/get")
 
-            assert response.status_code == 200
+                assert response.status_code == 200
 
-            # Read log file
-            with open(log_file, 'r') as f:
-                logs = [json.loads(line) for line in f]
+                # Read log file
+                with open(log_file, 'r') as f:
+                    logs = [json.loads(line) for line in f]
 
-            # Should have at least 2 logs (started + completed)
-            assert len(logs) >= 2
+                # Should have at least 2 logs (started + completed)
+                assert len(logs) >= 2
 
-            # Check first log (started)
-            started_log = logs[0]
-            assert started_log["message"] == "Request started"
-            assert started_log["method"] == "GET"
-            assert "https://httpbin.org/get" in started_log["url"]
+                # Check first log (started)
+                started_log = logs[0]
+                assert started_log["message"] == "Request started"
+                assert started_log["method"] == "GET"
+                assert "https://httpbin.org/get" in started_log["url"]
 
-            # Check last log (completed)
-            completed_log = logs[-1]
-            assert completed_log["message"] == "Request completed"
-            assert completed_log["status_code"] == 200
-            assert "duration_ms" in completed_log
+                # Check last log (completed)
+                completed_log = logs[-1]
+                assert completed_log["message"] == "Request completed"
+                assert completed_log["status_code"] == 200
+                assert "duration_ms" in completed_log
+            finally:
+                client.close()
 
         finally:
             if os.path.exists(log_file):
@@ -83,18 +86,20 @@ class TestHTTPClientLoggingIntegration:
             )
 
             client = HTTPClient(config=config)
+            try:
+                # Make request with custom correlation ID
+                custom_id = "test-correlation-123"
+                response = client.get("/get", headers={"X-Correlation-ID": custom_id})
 
-            # Make request with custom correlation ID
-            custom_id = "test-correlation-123"
-            response = client.get("/get", headers={"X-Correlation-ID": custom_id})
+                # Read logs
+                with open(log_file, 'r') as f:
+                    logs = [json.loads(line) for line in f]
 
-            # Read logs
-            with open(log_file, 'r') as f:
-                logs = [json.loads(line) for line in f]
-
-            # All logs should have the same correlation ID
-            for log in logs:
-                assert log.get("correlation_id") == custom_id
+                # All logs should have the same correlation ID
+                for log in logs:
+                    assert log.get("correlation_id") == custom_id
+            finally:
+                client.close()
 
         finally:
             if os.path.exists(log_file):
@@ -127,20 +132,22 @@ class TestHTTPClientLoggingIntegration:
             )
 
             client = HTTPClient(config=config)
-
-            # This endpoint returns 500, should trigger retries
             try:
-                response = client.get("/status/500")
-            except Exception:
-                pass  # Expected to fail
+                # This endpoint returns 500, should trigger retries
+                try:
+                    response = client.get("/status/500")
+                except Exception:
+                    pass  # Expected to fail
 
-            # Read logs
-            with open(log_file, 'r') as f:
-                logs = [json.loads(line) for line in f]
+                # Read logs
+                with open(log_file, 'r') as f:
+                    logs = [json.loads(line) for line in f]
 
-            # Should have multiple retry attempts logged
-            retry_logs = [log for log in logs if "retry" in log.get("message", "").lower() or "attempt" in log]
-            assert len(retry_logs) > 0
+                # Should have multiple retry attempts logged
+                retry_logs = [log for log in logs if "retry" in log.get("message", "").lower() or "attempt" in log]
+                assert len(retry_logs) > 0
+            finally:
+                client.close()
 
         finally:
             if os.path.exists(log_file):
