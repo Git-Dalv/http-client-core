@@ -429,6 +429,89 @@ class TestThreadSafety:
         # Clean up
         client.close()
 
+    def test_session_creation_race_condition(self):
+        """
+        Stress test to verify no race conditions during concurrent session creation.
+
+        This test simulates the exact scenario that would trigger a race condition:
+        50 threads all starting simultaneously and requesting sessions.
+        """
+        from src.http_client.core.session_manager import ThreadSafeSessionManager
+
+        def create_test_session():
+            """Factory to create test session."""
+            import requests
+            return requests.Session()
+
+        manager = ThreadSafeSessionManager(create_test_session)
+
+        # Number of threads to create
+        num_threads = 50
+        num_calls_per_thread = 10
+
+        # Barrier to ensure all threads start at the same time
+        barrier = threading.Barrier(num_threads)
+
+        # Storage for results
+        results_lock = threading.Lock()
+        thread_sessions = {}  # {thread_id: [session_id1, session_id2, ...]}
+        all_session_ids = []  # All unique session IDs seen
+        session_holder = []  # Keep strong references to prevent GC
+
+        def worker(thread_id: int):
+            """Worker that calls get_session multiple times."""
+            # Wait for all threads to be ready
+            barrier.wait()
+
+            # Call get_session multiple times
+            session_ids = []
+            for _ in range(num_calls_per_thread):
+                session = manager.get_session()
+                session_ids.append(id(session))
+
+            # Store results and keep session alive
+            with results_lock:
+                thread_sessions[thread_id] = session_ids
+                all_session_ids.extend(session_ids)
+                # Keep strong reference to prevent GC when thread exits
+                session_holder.append(session)
+
+        # Create and start all threads
+        threads = []
+        for i in range(num_threads):
+            thread = threading.Thread(target=worker, args=(i,))
+            threads.append(thread)
+            thread.start()
+
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+
+        # Verify results
+        # 1. Each thread should have gotten exactly num_calls_per_thread session IDs
+        assert len(thread_sessions) == num_threads
+        for thread_id, session_ids in thread_sessions.items():
+            assert len(session_ids) == num_calls_per_thread, \
+                f"Thread {thread_id} got {len(session_ids)} sessions instead of {num_calls_per_thread}"
+
+        # 2. Within each thread, all session IDs should be identical
+        #    (same session returned on every call)
+        for thread_id, session_ids in thread_sessions.items():
+            unique_ids = set(session_ids)
+            assert len(unique_ids) == 1, \
+                f"Thread {thread_id} got {len(unique_ids)} different sessions instead of 1"
+
+        # 3. Across all threads, we should have exactly num_threads unique sessions
+        unique_sessions = set(all_session_ids)
+        assert len(unique_sessions) == num_threads, \
+            f"Expected {num_threads} unique sessions, got {len(unique_sessions)}"
+
+        # 4. Verify manager's count matches
+        assert manager.get_active_sessions_count() == num_threads
+
+        # Clean up
+        manager.close_all()
+
     def test_session_manager_get_active_count(self):
         """Test that we can track the number of active sessions."""
         from src.http_client.core.session_manager import ThreadSafeSessionManager

@@ -399,3 +399,148 @@ class TestLoggerIntegration:
                 assert first_log["step"] == 1
 
             clear_correlation_id()
+
+
+class TestLoggerClose:
+    """Test logger close() method for resource cleanup."""
+
+    def test_logger_close_releases_handlers(self):
+        """Test that close() properly releases all handlers."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = os.path.join(tmpdir, "test.log")
+
+            config = LoggingConfig.create(
+                level="INFO",
+                enable_console=True,
+                enable_file=True,
+                file_path=log_file
+            )
+
+            logger = HTTPClientLogger(config)
+
+            # Log something
+            logger.info("Test message")
+
+            # Verify handlers exist
+            assert len(logger._logger.handlers) > 0
+            initial_handler_count = len(logger._logger.handlers)
+
+            # Close logger
+            logger.close()
+
+            # Verify handlers are cleared
+            assert len(logger._logger.handlers) == 0
+
+            # Verify file was created and written
+            assert os.path.exists(log_file)
+
+            # Verify we can delete the file (handler released the lock)
+            os.remove(log_file)
+            assert not os.path.exists(log_file)
+
+    def test_logger_close_idempotent(self):
+        """Test that close() can be called multiple times safely."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = os.path.join(tmpdir, "test.log")
+
+            config = LoggingConfig.create(
+                level="INFO",
+                enable_file=True,
+                file_path=log_file
+            )
+
+            logger = HTTPClientLogger(config)
+            logger.info("Test message")
+
+            # Call close multiple times
+            logger.close()
+            logger.close()
+            logger.close()
+
+            # Should not raise errors
+            assert logger._closed is True
+            assert len(logger._logger.handlers) == 0
+
+    def test_logger_context_manager(self):
+        """Test that logger works as context manager."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = os.path.join(tmpdir, "test.log")
+
+            config = LoggingConfig.create(
+                level="INFO",
+                enable_console=False,
+                enable_file=True,
+                file_path=log_file
+            )
+
+            with HTTPClientLogger(config) as logger:
+                logger.info("Test message")
+                assert len(logger._logger.handlers) > 0
+
+            # After exit, handlers should be closed
+            assert logger._closed is True
+            assert len(logger._logger.handlers) == 0
+
+            # Verify file was written and can be deleted
+            assert os.path.exists(log_file)
+            os.remove(log_file)
+
+    def test_logger_close_file_handle_released(self):
+        """Test that close() releases file handle allowing deletion."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_file = os.path.join(tmpdir, "test.log")
+
+            config = LoggingConfig.create(
+                level="INFO",
+                enable_console=False,
+                enable_file=True,
+                file_path=log_file
+            )
+
+            logger = HTTPClientLogger(config)
+            logger.info("Test message 1")
+            logger.info("Test message 2")
+
+            # Without close, file handler holds lock (especially on Windows)
+            # After close, file should be deletable
+            logger.close()
+
+            # This should not raise PermissionError
+            os.remove(log_file)
+            assert not os.path.exists(log_file)
+
+    def test_logger_close_with_console_only(self):
+        """Test close() with console handler only (no file)."""
+        config = LoggingConfig.create(
+            level="INFO",
+            enable_console=True,
+            enable_file=False
+        )
+
+        logger = HTTPClientLogger(config)
+        logger.info("Test message")
+
+        assert len(logger._logger.handlers) > 0
+
+        logger.close()
+
+        assert len(logger._logger.handlers) == 0
+        assert logger._closed is True
+
+    def test_logger_close_empty(self):
+        """Test close() on logger with no handlers."""
+        config = LoggingConfig.create(
+            level="INFO",
+            enable_console=False,
+            enable_file=False
+        )
+
+        logger = HTTPClientLogger(config)
+
+        # Should have no handlers
+        assert len(logger._logger.handlers) == 0
+
+        # Close should not raise error
+        logger.close()
+
+        assert logger._closed is True
