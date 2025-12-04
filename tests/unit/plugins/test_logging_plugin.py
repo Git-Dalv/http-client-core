@@ -1,13 +1,22 @@
 """
 Comprehensive tests for LoggingPlugin - complete coverage.
+
+NOTE: These tests are for the deprecated LoggingPlugin class.
+They intentionally use deprecated APIs to ensure backward compatibility.
+Deprecation warnings are expected and suppressed.
 """
 
 from unittest.mock import Mock, patch
 
+import pytest
 import requests
 
 from src.http_client.core.exceptions import HTTPClientException
 from src.http_client.plugins.logging_plugin import LoggingPlugin
+
+
+# Suppress deprecation warnings - we're testing deprecated API for backward compatibility
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
 class TestLoggingPluginInit:

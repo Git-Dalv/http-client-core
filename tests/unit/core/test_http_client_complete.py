@@ -47,8 +47,9 @@ class TestHTTPClientInitialization:
         assert client.timeout == 30  # Default timeout
         client.close()
 
+    @pytest.mark.filterwarnings("ignore::DeprecationWarning")
     def test_init_with_verify_ssl_false(self):
-        """Test initialization with SSL verification disabled."""
+        """Test initialization with SSL verification disabled (using deprecated verify_ssl parameter)."""
         client = HTTPClient(verify_ssl=False)
         assert client._verify_ssl is False
         client.close()

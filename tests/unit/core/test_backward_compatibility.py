@@ -127,9 +127,13 @@ def test_immutability_error_message():
     assert "new instance" in error_msg.lower()
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @responses.activate
 def test_mixed_old_new_style():
-    """Можно мешать старый и новый стиль."""
+    """Можно мешать старый и новый стиль.
+
+    This test intentionally uses deprecated LoggingPlugin to test backward compatibility.
+    """
     responses.add(responses.GET, "https://api.example.com/test", json={})
 
     from src.http_client import HTTPClientConfig, LoggingPlugin
@@ -140,7 +144,7 @@ def test_mixed_old_new_style():
         timeout=30
     )
 
-    # But pass plugins old style
+    # But pass plugins old style (deprecated but should still work)
     plugin = LoggingPlugin()
 
     client = HTTPClient(config=config, plugins=[plugin])
