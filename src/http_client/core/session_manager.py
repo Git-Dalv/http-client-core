@@ -21,9 +21,17 @@ class ThreadSafeSessionManager:
 
     Features:
         - Thread-local session isolation
-        - Lazy initialization
+        - Lazy initialization with atomic creation
         - Automatic cleanup of all sessions
         - Weak references to track sessions
+
+    Thread Safety Guarantees:
+        - Each thread receives exactly one session instance
+        - Session creation is atomic using double-checked locking
+        - Multiple concurrent calls to get_session() from the same thread
+          will always return the same session object
+        - Sessions from different threads are completely isolated
+        - No race conditions during concurrent initialization
 
     Example:
         >>> manager = ThreadSafeSessionManager(session_factory)
@@ -41,6 +49,9 @@ class ThreadSafeSessionManager:
         self._session_factory = session_factory
         self._local = threading.local()
 
+        # Lock for atomic session creation (prevents race conditions)
+        self._creation_lock = threading.Lock()
+
         # Track all created sessions for cleanup (using weak references)
         self._all_sessions: Set[weakref.ref] = set()
         self._sessions_lock = threading.Lock()
@@ -49,20 +60,34 @@ class ThreadSafeSessionManager:
         """
         Get thread-local session, creating it lazily if needed.
 
+        Uses double-checked locking pattern to ensure atomic session creation
+        while maintaining performance for already-initialized threads.
+
         Returns:
             requests.Session instance for current thread
-        """
-        # Check if current thread already has a session
-        if not hasattr(self._local, 'session') or self._local.session is None:
-            # Create new session for this thread
-            session = self._session_factory()
-            self._local.session = session
 
-            # Track this session for cleanup (weak reference to avoid memory leaks)
-            with self._sessions_lock:
-                # Create weak reference with callback to remove from set when GC'd
-                ref = weakref.ref(session, self._cleanup_weak_ref)
-                self._all_sessions.add(ref)
+        Thread Safety:
+            This method is thread-safe. Multiple concurrent calls from the same
+            thread will always return the same session object without race conditions.
+        """
+        # Fast path: check if session already exists (no lock needed)
+        if hasattr(self._local, 'session') and self._local.session is not None:
+            return self._local.session
+
+        # Slow path: session needs to be created (acquire lock)
+        with self._creation_lock:
+            # Double-check: another thread might have created the session
+            # while we were waiting for the lock
+            if not hasattr(self._local, 'session') or self._local.session is None:
+                # Create new session for this thread
+                session = self._session_factory()
+                self._local.session = session
+
+                # Track this session for cleanup (weak reference to avoid memory leaks)
+                with self._sessions_lock:
+                    # Create weak reference with callback to remove from set when GC'd
+                    ref = weakref.ref(session, self._cleanup_weak_ref)
+                    self._all_sessions.add(ref)
 
         return self._local.session
 

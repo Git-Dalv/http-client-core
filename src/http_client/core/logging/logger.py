@@ -50,6 +50,7 @@ class HTTPClientLogger:
         """
         self.config = config or LoggingConfig()
         self.name = name
+        self._closed = False
 
         # Create Python logger
         self._logger = logging.getLogger(name)
@@ -188,6 +189,68 @@ class HTTPClientLogger:
             ...     logger.exception("Operation failed", operation="risky_operation")
         """
         self._logger.exception(message, extra=kwargs)
+
+    def close(self) -> None:
+        """
+        Close all handlers and release resources.
+
+        This method should be called when the logger is no longer needed,
+        especially when file handlers are used. It ensures proper cleanup
+        of file descriptors and other resources.
+
+        This method is idempotent - it can be safely called multiple times.
+
+        Example:
+            >>> logger = HTTPClientLogger(config)
+            >>> logger.info("Processing...")
+            >>> logger.close()  # Release resources
+            >>> logger.close()  # Safe to call again
+
+            >>> # Or use as context manager
+            >>> with HTTPClientLogger(config) as logger:
+            ...     logger.info("Processing...")
+            >>> # Automatically closed
+        """
+        if self._closed:
+            return  # Already closed
+
+        # Flush and close all handlers
+        for handler in self._logger.handlers[:]:  # Copy list to avoid modification during iteration
+            try:
+                # Flush any buffered data
+                handler.flush()
+            except Exception:
+                # Ignore flush errors
+                pass
+
+            try:
+                # Close the handler
+                handler.close()
+            except Exception:
+                # Ignore close errors
+                pass
+
+            try:
+                # Remove from logger
+                self._logger.removeHandler(handler)
+            except Exception:
+                # Ignore removal errors
+                pass
+
+        # Clear the handlers list
+        self._logger.handlers.clear()
+
+        # Mark as closed
+        self._closed = True
+
+    def __enter__(self):
+        """Context manager support."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Close logger on context exit."""
+        self.close()
+        return False
 
 
 # Global logger instance (singleton pattern)

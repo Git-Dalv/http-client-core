@@ -174,7 +174,20 @@ class HTTPClient:
         Рекомендуется вызывать после завершения работы с клиентом.
 
         Thread-safe: закрывает сессии из всех потоков, которые использовали клиент.
+
+        Cleanup order:
+            1. Logger handlers (flush and close file descriptors)
+            2. Session connections (close all thread-local sessions)
         """
+        # Close logger first (flush and close file handlers)
+        if hasattr(self, "_logger") and self._logger is not None:
+            try:
+                self._logger.close()
+            except Exception:
+                # Ignore errors during cleanup
+                pass
+
+        # Then close sessions
         if hasattr(self, "_session_manager"):
             self._session_manager.close_all()
 
