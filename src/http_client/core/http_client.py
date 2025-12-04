@@ -11,6 +11,7 @@ from ..plugins.plugin import Plugin
 from .config import HTTPClientConfig, TimeoutConfig
 from .retry_engine import RetryEngine
 from .error_handler import ErrorHandler
+from .session_manager import ThreadSafeSessionManager
 from .exceptions import (
     classify_requests_exception,
     TooManyRetriesError,
@@ -33,6 +34,7 @@ class HTTPClient:
         - Поддержка прокси
         - Контекстный менеджер для автоматического освобождения ресурсов
         - Immutable конфигурация для потокобезопасности
+        - Thread-safe: каждый поток получает собственную сессию
     """
 
     def __init__(
@@ -106,7 +108,13 @@ class HTTPClient:
             )
 
         object.__setattr__(self, '_logger', logger_instance)
-        object.__setattr__(self, '_session', self._create_session())
+
+        # Thread-safe session manager - each thread gets its own session
+        object.__setattr__(
+            self,
+            '_session_manager',
+            ThreadSafeSessionManager(session_factory=self._create_session)
+        )
 
         # Backward compatibility attributes
         object.__setattr__(self, '_timeout', config.timeout.read)  # Legacy: single timeout value
@@ -162,11 +170,13 @@ class HTTPClient:
 
     def close(self):
         """
-        Закрывает сессию и освобождает ресурсы.
+        Закрывает все сессии (из всех потоков) и освобождает ресурсы.
         Рекомендуется вызывать после завершения работы с клиентом.
+
+        Thread-safe: закрывает сессии из всех потоков, которые использовали клиент.
         """
-        if hasattr(self, "_session"):
-            self._session.close()
+        if hasattr(self, "_session_manager"):
+            self._session_manager.close_all()
 
     # ==================== Управление плагинами ====================
 
@@ -197,19 +207,19 @@ class HTTPClient:
 
     def get_cookies(self) -> Dict[str, str]:
         """
-        Получает все текущие куки.
+        Получает все текущие куки для текущего потока.
 
         Returns:
             Словарь с куками
         """
-        return dict(self._session.cookies)
+        return dict(self.session.cookies)
 
     # src/http_client/core/http_client.py
 
     # Замените метод set_cookie на этот:
     def set_cookie(self, name: str, value: str, domain: str = "", path: str = "/"):
         """
-        Устанавливает куку.
+        Устанавливает куку для текущего потока.
 
         Args:
             name: Имя куки
@@ -228,11 +238,11 @@ class HTTPClient:
         if domain is None:
             domain = ""
 
-        self._session.cookies.set(name, value, domain=domain, path=path)
+        self.session.cookies.set(name, value, domain=domain, path=path)
 
     def remove_cookie(self, name: str, domain: str = None, path: str = "/"):
         """
-        Удаляет конкретную куку.
+        Удаляет конкретную куку для текущего потока.
 
         Args:
             name: Имя куки
@@ -246,53 +256,55 @@ class HTTPClient:
             # Удалить куку из конкретного домена
             client.remove_cookie("user_token", domain="example.com")
         """
+        session = self.session
         if domain is not None:
             # Удаляем из конкретного домена
-            self._session.cookies.clear(domain=domain, path=path, name=name)
+            session.cookies.clear(domain=domain, path=path, name=name)
         else:
             # Удаляем из всех доменов
             cookies_to_remove = []
-            for cookie in self._session.cookies:
+            for cookie in session.cookies:
                 if cookie.name == name:
                     cookies_to_remove.append((cookie.domain, cookie.path))
 
             for cookie_domain, cookie_path in cookies_to_remove:
-                self._session.cookies.clear(domain=cookie_domain, path=cookie_path, name=name)
+                session.cookies.clear(domain=cookie_domain, path=cookie_path, name=name)
 
     def clear_cookies(self):
-        """Очищает все куки"""
-        self._session.cookies.clear()
+        """Очищает все куки для текущего потока"""
+        self.session.cookies.clear()
 
     # ==================== Управление заголовками ====================
 
     def set_header(self, key: str, value: str):
         """
-        Устанавливает заголовок для всех последующих запросов.
+        Устанавливает заголовок для всех последующих запросов в текущем потоке.
 
         Args:
             key: Имя заголовка
             value: Значение заголовка
         """
-        self._session.headers[key] = value
+        self.session.headers[key] = value
 
     def remove_header(self, key: str):
         """
-        Удаляет заголовок.
+        Удаляет заголовок для текущего потока.
 
         Args:
             key: Имя заголовка
         """
-        if key in self._session.headers:
-            del self._session.headers[key]
+        session = self.session
+        if key in session.headers:
+            del session.headers[key]
 
     def get_headers(self) -> Dict[str, str]:
         """
-        Получает текущие заголовки.
+        Получает текущие заголовки для текущего потока.
 
         Returns:
             Словарь с заголовками
         """
-        return dict(self._session.headers)
+        return dict(self.session.headers)
 
     # ==================== Управление прокси ====================
 
@@ -476,8 +488,8 @@ class HTTPClient:
                         except Exception as e:
                             print(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
 
-                    # Make request
-                    response = self._session.request(
+                    # Make request (using thread-local session)
+                    response = self.session.request(
                         method=method,
                         url=url,
                         timeout=timeout,
@@ -792,8 +804,8 @@ class HTTPClient:
         # Timeout
         timeout = kwargs.pop('timeout', self._config.timeout.as_tuple())
 
-        # Make request
-        response = self._session.get(
+        # Make request (using thread-local session)
+        response = self.session.get(
             url,
             timeout=timeout,
             verify=self._config.security.verify_ssl,
@@ -862,13 +874,17 @@ class HTTPClient:
     @property
     def session(self) -> requests.Session:
         """
-        Предоставляет прямой доступ к внутренней сессии.
-        Используйте с осторожностью!
+        Предоставляет прямой доступ к thread-local сессии.
+
+        Каждый поток получает свою собственную изолированную сессию.
+        Сессия создается лениво при первом обращении из потока.
+
+        Thread-safe: безопасно использовать из нескольких потоков.
 
         Returns:
-            Объект Session
+            Объект Session для текущего потока
         """
-        return self._session
+        return self._session_manager.get_session()
 
     @property
     def base_url(self) -> Optional[str]:

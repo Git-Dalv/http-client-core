@@ -35,7 +35,7 @@ class TestHTTPClientInit:
         """Test initialization with custom headers."""
         headers = {"Authorization": "Bearer token123"}
         client = HTTPClient(base_url=base_url, headers=headers)
-        assert "Authorization" in client._session.headers
+        assert "Authorization" in client.session.headers
         client.close()
 
     def test_client_init_with_timeout(self, base_url):
@@ -58,9 +58,9 @@ class TestHTTPClientInit:
         client.close()
 
     def test_client_session_created(self, base_url):
-        """Test that session is created on init."""
+        """Test that session is created (lazily) when accessed."""
         client = HTTPClient(base_url=base_url)
-        assert client._session is not None
+        assert client.session is not None
         client.close()
 
 
@@ -70,7 +70,7 @@ class TestHTTPClientContextManager:
     def test_context_manager_basic(self, base_url):
         """Test basic context manager usage."""
         with HTTPClient(base_url=base_url) as client:
-            assert client._session is not None
+            assert client.session is not None
 
     @responses.activate
     def test_context_manager_with_request(self, base_url):
