@@ -61,10 +61,10 @@ class TestHTTPClientInitialization:
         client.close()
 
     def test_session_created(self):
-        """Test that session is created on initialization."""
+        """Test that session is created (lazily) when accessed."""
         client = HTTPClient()
-        assert client._session is not None
-        assert isinstance(client._session, requests_lib.Session)
+        assert client.session is not None
+        assert isinstance(client.session, requests_lib.Session)
         client.close()
 
 
@@ -74,7 +74,7 @@ class TestHTTPClientContextManager:
     def test_context_manager_basic(self):
         """Test basic context manager usage."""
         with HTTPClient(base_url="https://api.example.com") as client:
-            assert client._session is not None
+            assert client.session is not None
 
     @responses.activate
     def test_context_manager_with_request(self):
@@ -91,7 +91,7 @@ class TestHTTPClientContextManager:
         """Test that context manager properly closes session."""
         client = HTTPClient()
         with client:
-            session = client._session
+            session = client.session
             assert session is not None
 
         # Session should be closed after context exit
@@ -352,7 +352,7 @@ class TestHTTPClientClose:
     def test_close_closes_session(self):
         """Test that close() closes the session."""
         client = HTTPClient()
-        session = client._session
+        session = client.session
         client.close()
         # After close, session should be closed
         # We can't directly verify, but we can check it doesn't raise
