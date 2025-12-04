@@ -1,12 +1,14 @@
 # src/http_client/plugins/disk_cache_plugin.py
 import hashlib
 import json
+import time
 from typing import Any, Dict, Optional
 
 import requests
 from diskcache import Cache
 
 from .plugin import Plugin
+from ..utils.serialization import serialize_response, deserialize_response
 
 
 class DiskCachePlugin(Plugin):
@@ -60,7 +62,7 @@ class DiskCachePlugin(Plugin):
         self.cache_dir = cache_dir
         self.ttl = ttl
         self.size_limit = size_limit
-        self.cache_methods = cache_methods
+        self.cacheable_methods = [m.upper() for m in cache_methods]  # Normalize to uppercase
         self.include_headers = include_headers
 
         actual_size_limit = size_limit if size_limit is not None else 2**30  # 1 GB по умолчанию
@@ -71,45 +73,30 @@ class DiskCachePlugin(Plugin):
         )
 
         # Статистика
-        self.stats = {"hits": 0, "misses": 0, "sets": 0}
+        self.stats = {"hits": 0, "misses": 0}
 
-    def _generate_cache_key(self, method: str, url: str, **kwargs: Any) -> str:
+    def _generate_cache_key(self, method: str, url: str, kwargs: Dict[str, Any]) -> str:
         """
-        Генерирует уникальный ключ для кэширования.
+        Генерирует стабильный ключ кэша из параметров запроса.
 
         Args:
             method: HTTP метод
             url: URL запроса
-            **kwargs: Дополнительные параметры запроса
+            kwargs: Параметры запроса (params, headers, etc.)
 
         Returns:
-            Хеш-ключ для кэша
+            SHA256 хеш как ключ кэша
         """
-        # Базовые компоненты ключа
-        key_parts = [method.upper(), url]
+        # Извлекаем релевантные части
+        params = kwargs.get('params', {})
 
-        # Добавляем query параметры
-        if "params" in kwargs and kwargs["params"]:
-            params_str = json.dumps(kwargs["params"], sort_keys=True)
-            key_parts.append(f"params:{params_str}")
+        # Стабильная сериализация (sorted keys)
+        params_str = json.dumps(params, sort_keys=True) if params else ''
 
-        # Добавляем body для POST/PUT/PATCH
-        if method.upper() in ("POST", "PUT", "PATCH"):
-            if "json" in kwargs and kwargs["json"]:
-                json_str = json.dumps(kwargs["json"], sort_keys=True)
-                key_parts.append(f"json:{json_str}")
-            elif "data" in kwargs and kwargs["data"]:
-                data_str = str(kwargs["data"])
-                key_parts.append(f"data:{data_str}")
+        # Генерируем ключ
+        key_source = f"{method.upper()}:{url}:{params_str}"
 
-        # Добавляем заголовки если требуется
-        if self.include_headers and "headers" in kwargs and kwargs["headers"]:
-            headers_str = json.dumps(kwargs["headers"], sort_keys=True)
-            key_parts.append(f"headers:{headers_str}")
-
-        # Генерируем хеш
-        key_string = "|".join(key_parts)
-        return hashlib.sha256(key_string.encode()).hexdigest()
+        return hashlib.sha256(key_source.encode('utf-8')).hexdigest()
 
     def _should_cache(self, method: str, response: requests.Response) -> bool:
         """
@@ -123,7 +110,7 @@ class DiskCachePlugin(Plugin):
             True если ответ нужно кэшировать
         """
         # Проверяем метод
-        if method.upper() not in self.cache_methods:
+        if method.upper() not in self.cacheable_methods:
             return False
 
         # Проверяем статус код (кэшируем только успешные ответы)
@@ -137,46 +124,6 @@ class DiskCachePlugin(Plugin):
 
         return True
 
-    def _serialize_response(self, response: requests.Response) -> Dict[str, Any]:
-        """
-        Сериализует ответ для сохранения в кэш.
-
-        Args:
-            response: Объект ответа
-
-        Returns:
-            Словарь с данными ответа
-        """
-        return {
-            "status_code": response.status_code,
-            "headers": dict(response.headers),
-            "content": response.content,
-            "url": response.url,
-            "encoding": response.encoding,
-        }
-
-    def _deserialize_response(self, cached_data: Dict[str, Any]) -> requests.Response:
-        """
-        Восстанавливает объект Response из кэша.
-
-        Args:
-            cached_data: Закэшированные данные
-
-        Returns:
-            Объект Response
-        """
-        response = requests.Response()
-        response.status_code = cached_data["status_code"]
-        response.headers.update(cached_data["headers"])
-        response._content = cached_data["content"]
-        response.url = cached_data["url"]
-        response.encoding = cached_data["encoding"]
-
-        # Добавляем маркер что ответ из кэша
-        response.headers["X-Cache"] = "HIT"
-
-        return response
-
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         """
         Проверяет наличие закэшированного ответа перед запросом.
@@ -187,31 +134,35 @@ class DiskCachePlugin(Plugin):
             **kwargs: Параметры запроса
 
         Returns:
-            Обновленные параметры запроса
+            Словарь с ключом '__cached_response__' если найден кэш,
+            иначе пустой словарь (kwargs не модифицируются)
         """
         # Проверяем, нужно ли кэшировать этот метод
-        if method.upper() not in self.cache_methods:
-            return kwargs
+        if method.upper() not in self.cacheable_methods:
+            return {}
 
         # Генерируем ключ кэша
-        cache_key = self._generate_cache_key(method, url, **kwargs)
+        cache_key = self._generate_cache_key(method, url, kwargs)
 
         # Проверяем наличие в кэше
         cached_data = self.cache.get(cache_key)
 
         if cached_data is not None:
-            # Кэш найден
+            # Кэш найден - восстанавливаем ответ
             self.stats["hits"] += 1
 
-            # Сохраняем закэшированный ответ в kwargs для использования
-            kwargs["_cached_response"] = self._deserialize_response(cached_data)
-            kwargs["_cache_key"] = cache_key
+            # Используем утилиты для десериализации
+            cached_response = deserialize_response(cached_data)
+
+            # Добавляем маркер что ответ из кэша
+            cached_response.headers["X-Cache"] = "HIT"
+
+            # Возвращаем специальный ключ для short-circuit
+            return {"__cached_response__": cached_response}
         else:
             # Кэш не найден
             self.stats["misses"] += 1
-            kwargs["_cache_key"] = cache_key
-
-        return kwargs
+            return {}
 
     def after_response(self, response: requests.Response) -> requests.Response:
         """
@@ -223,30 +174,36 @@ class DiskCachePlugin(Plugin):
         Returns:
             Объект ответа
         """
-        # Проверяем, есть ли закэшированный ответ в request
-        if hasattr(response, "request") and hasattr(response.request, "_cached_response"):
-            # Возвращаем закэшированный ответ
-            cached_response = response.request._cached_response
-            # Копируем request для сохранения контекста
-            cached_response.request = response.request
-            return cached_response
+        # Lazy import to avoid circular dependency
+        from ..core.http_client import get_current_request_context
+
+        # Получаем контекст текущего запроса (thread-safe)
+        context = get_current_request_context()
+
+        # Если контекста нет, ничего не делаем
+        if not context:
+            return response
+
+        method = context.get("method")
+        url = context.get("url")
+        kwargs = context.get("kwargs", {})
 
         # Проверяем, нужно ли кэшировать ответ
-        if hasattr(response, "request"):
-            method = response.request.method
+        if self._should_cache(method, response):
+            # Генерируем ключ кэша из параметров запроса
+            cache_key = self._generate_cache_key(method, url, kwargs)
 
-            if self._should_cache(method, response):
-                # Получаем ключ кэша из request
-                cache_key = getattr(response.request, "_cache_key", None)
+            # Сериализуем и сохраняем ответ
+            serialized = serialize_response(response)
+            self.cache.set(cache_key, serialized, expire=self.ttl)
 
-                if cache_key:
-                    # Сериализуем и сохраняем ответ
-                    serialized = self._serialize_response(response)
-                    self.cache.set(cache_key, serialized, expire=self.ttl)
-                    self.stats["sets"] += 1
+            # Обновляем статистику (инициализируем "sets" если нет)
+            if "sets" not in self.stats:
+                self.stats["sets"] = 0
+            self.stats["sets"] += 1
 
-                    # Добавляем маркер что ответ был закэширован
-                    response.headers["X-Cache"] = "MISS"
+            # Добавляем маркер что ответ был закэширован
+            response.headers["X-Cache"] = "MISS"
 
         return response
 
@@ -274,7 +231,7 @@ class DiskCachePlugin(Plugin):
     def clear(self):
         """Очищает весь кэш"""
         self.cache.clear()
-        self.stats = {"hits": 0, "misses": 0, "sets": 0}
+        self.stats = {"hits": 0, "misses": 0}
 
     def delete(self, method: str, url: str, **kwargs: Any):
         """
@@ -285,7 +242,7 @@ class DiskCachePlugin(Plugin):
             url: URL запроса
             **kwargs: Параметры запроса
         """
-        cache_key = self._generate_cache_key(method, url, **kwargs)
+        cache_key = self._generate_cache_key(method, url, kwargs)
         self.cache.delete(cache_key)
 
     def get_stats(self) -> Dict[str, Any]:
@@ -301,7 +258,7 @@ class DiskCachePlugin(Plugin):
         return {
             "hits": self.stats["hits"],
             "misses": self.stats["misses"],
-            "sets": self.stats["sets"],
+            "sets": self.stats.get("sets", 0),
             "hit_rate": f"{hit_rate:.2f}%",
             "cache_size": len(self.cache),
             "disk_size_bytes": self.cache.volume(),

@@ -31,7 +31,7 @@ from .exceptions import (
     ConfigurationError,
     classify_requests_exception,
 )
-from .http_client import HTTPClient
+from .http_client import HTTPClient, get_current_request_context
 from .error_handler import ErrorHandler
 
 __all__ = [
@@ -46,6 +46,7 @@ __all__ = [
     # Core
     "HTTPClient",
     "ErrorHandler",
+    "get_current_request_context",
     # Exceptions
     "HTTPClientException",
     "TemporaryError",

@@ -2,6 +2,7 @@
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 import time
 import warnings
+import threading
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -22,6 +23,31 @@ from .exceptions import (
 # Delayed import to avoid circular dependency
 if TYPE_CHECKING:
     from .logging import HTTPClientLogger
+
+
+# Module-level thread-local storage for request context
+_request_context = threading.local()
+
+
+def get_current_request_context() -> Optional[Dict[str, Any]]:
+    """
+    Get current request context (thread-safe).
+
+    Returns None if called outside of request context.
+    Used by plugins to access request parameters in after_response hook.
+
+    Returns:
+        Dictionary with 'method', 'url', and 'kwargs' keys, or None
+
+    Example:
+        >>> # In plugin's after_response hook:
+        >>> context = get_current_request_context()
+        >>> if context:
+        ...     method = context['method']
+        ...     url = context['url']
+        ...     params = context['kwargs'].get('params', {})
+    """
+    return getattr(_request_context, 'data', None)
 
 
 class HTTPClient:
@@ -446,6 +472,13 @@ class HTTPClient:
         # Build full URL
         url = self._build_url(endpoint)
 
+        # Store request context for plugins (thread-safe)
+        _request_context.data = {
+            'method': method,
+            'url': url,
+            'kwargs': kwargs.copy()
+        }
+
         # Add correlation ID for request tracing
         import uuid
 
@@ -497,7 +530,15 @@ class HTTPClient:
                     # Before request hooks
                     for plugin in self._plugins:
                         try:
-                            plugin.before_request(method=method, url=url, **kwargs)
+                            result = plugin.before_request(method=method, url=url, **kwargs)
+
+                            # Check if plugin returned cached response (short-circuit)
+                            if isinstance(result, dict):
+                                if '__cached_response__' in result:
+                                    # Return cached response immediately, skip HTTP call
+                                    return result['__cached_response__']
+                                # Update kwargs with plugin modifications
+                                kwargs.update(result)
                         except Exception as e:
                             print(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
 
@@ -691,6 +732,9 @@ class HTTPClient:
             if self._logger:
                 from .logging.filters import clear_correlation_id
                 clear_correlation_id()
+
+            # Clear request context (thread-safe cleanup)
+            _request_context.data = None
 
     def get(self, endpoint: str, **kwargs: Any) -> requests.Response:
         """
