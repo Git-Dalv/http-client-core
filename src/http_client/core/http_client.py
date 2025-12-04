@@ -13,6 +13,7 @@ from .config import HTTPClientConfig, TimeoutConfig
 from .retry_engine import RetryEngine
 from .error_handler import ErrorHandler
 from .session_manager import ThreadSafeSessionManager
+from .context import RequestContext
 from .exceptions import (
     classify_requests_exception,
     TooManyRetriesError,
@@ -472,13 +473,6 @@ class HTTPClient:
         # Build full URL
         url = self._build_url(endpoint)
 
-        # Store request context for plugins (thread-safe)
-        _request_context.data = {
-            'method': method,
-            'url': url,
-            'kwargs': kwargs.copy()
-        }
-
         # Add correlation ID for request tracing
         import uuid
 
@@ -490,6 +484,21 @@ class HTTPClient:
         if not correlation_id:
             correlation_id = str(uuid.uuid4())
             kwargs['headers']['X-Correlation-ID'] = correlation_id
+
+        # Create request context for v2 plugins
+        ctx = RequestContext(
+            method=method,
+            url=url,
+            kwargs=kwargs.copy(),
+            request_id=correlation_id  # Use same ID as correlation ID
+        )
+
+        # Store request context for v1 plugins (thread-safe, backward compatibility)
+        _request_context.data = {
+            'method': method,
+            'url': url,
+            'kwargs': kwargs.copy()
+        }
 
         # Set correlation ID in logging context
         if self._logger:
@@ -527,18 +536,31 @@ class HTTPClient:
         try:
             while True:
                 try:
-                    # Before request hooks
+                    # Before request hooks (support both v1 and v2 APIs)
                     for plugin in self._plugins:
                         try:
-                            result = plugin.before_request(method=method, url=url, **kwargs)
+                            # Lazy import to avoid circular dependency
+                            from ..plugins.base_v2 import PluginV2
 
-                            # Check if plugin returned cached response (short-circuit)
-                            if isinstance(result, dict):
-                                if '__cached_response__' in result:
-                                    # Return cached response immediately, skip HTTP call
-                                    return result['__cached_response__']
-                                # Update kwargs with plugin modifications
-                                kwargs.update(result)
+                            if isinstance(plugin, PluginV2):
+                                # V2 API - receives RequestContext, can return Response
+                                result = plugin.before_request(ctx)
+                                if result is not None:
+                                    # Short-circuit with response from plugin
+                                    return result
+                                # Apply modified kwargs from context
+                                kwargs.update(ctx.kwargs)
+                            else:
+                                # V1 API - legacy support
+                                result = plugin.before_request(method=method, url=url, **kwargs)
+
+                                # Check if plugin returned cached response (short-circuit)
+                                if isinstance(result, dict):
+                                    if '__cached_response__' in result:
+                                        # Return cached response immediately, skip HTTP call
+                                        return result['__cached_response__']
+                                    # Update kwargs with plugin modifications
+                                    kwargs.update(result)
                         except Exception as e:
                             print(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
 
@@ -619,10 +641,18 @@ class HTTPClient:
                             # If we can't check, proceed cautiously
                             pass
 
-                    # After response hooks
+                    # After response hooks (support both v1 and v2 APIs)
                     for plugin in self._plugins:
                         try:
-                            plugin.after_response(response=response)
+                            # Lazy import to avoid circular dependency
+                            from ..plugins.base_v2 import PluginV2
+
+                            if isinstance(plugin, PluginV2):
+                                # V2 API - receives RequestContext and Response
+                                response = plugin.after_response(ctx, response)
+                            else:
+                                # V1 API - only receives Response
+                                response = plugin.after_response(response=response)
                         except Exception as e:
                             print(f"Plugin {plugin.__class__.__name__} error in after_response: {e}")
 
@@ -654,15 +684,23 @@ class HTTPClient:
                     # Get response if exists
                     response = getattr(e, 'response', None)
 
-                    # Error hooks
+                    # Error hooks (support both v1 and v2 APIs)
                     for plugin in self._plugins:
                         try:
-                            plugin.on_error(
-                                error=our_error,
-                                method=method,
-                                url=url,
-                                response=response
-                            )
+                            # Lazy import to avoid circular dependency
+                            from ..plugins.base_v2 import PluginV2
+
+                            if isinstance(plugin, PluginV2):
+                                # V2 API - receives RequestContext and error
+                                plugin.on_error(ctx, our_error)
+                            else:
+                                # V1 API - receives individual parameters
+                                plugin.on_error(
+                                    error=our_error,
+                                    method=method,
+                                    url=url,
+                                    response=response
+                                )
                         except Exception as plugin_error:
                             print(f"Plugin {plugin.__class__.__name__} error in on_error: {plugin_error}")
 

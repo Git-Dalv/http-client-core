@@ -8,8 +8,11 @@ from .monitoring_plugin import MonitoringPlugin
 from .plugin import Plugin
 from .rate_limit_plugin import RateLimitPlugin
 from .retry_plugin import RetryPlugin
+from .base_v2 import PluginV2
+from .disk_cache_v2 import DiskCachePluginV2
 
 __all__ = [
+    # V1 API (legacy)
     "Plugin",
     "LoggingPlugin",
     "RetryPlugin",
@@ -19,4 +22,7 @@ __all__ = [
     "DiskCachePlugin",
     "MonitoringPlugin",
     "BrowserFingerprintPlugin",
+    # V2 API (recommended)
+    "PluginV2",
+    "DiskCachePluginV2",
 ]
