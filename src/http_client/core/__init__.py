@@ -33,6 +33,7 @@ from .exceptions import (
 )
 from .http_client import HTTPClient, get_current_request_context
 from .error_handler import ErrorHandler
+from .context import RequestContext
 
 __all__ = [
     # Config
@@ -47,6 +48,7 @@ __all__ = [
     "HTTPClient",
     "ErrorHandler",
     "get_current_request_context",
+    "RequestContext",
     # Exceptions
     "HTTPClientException",
     "TemporaryError",
