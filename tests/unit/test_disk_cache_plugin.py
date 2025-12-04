@@ -43,7 +43,6 @@ def cache_dir():
                     time.sleep(0.2)
 
 
-@pytest.mark.skip(reason="DiskCachePlugin caching mechanism needs review")
 def test_disk_cache_basic(cache_dir):
     """Тест базового кэширования на диске"""
     plugin = DiskCachePlugin(cache_dir=cache_dir, ttl=60)
@@ -77,7 +76,6 @@ def test_disk_cache_basic(cache_dir):
         plugin.close()
 
 
-@pytest.mark.skip(reason="DiskCachePlugin caching mechanism needs review")
 def test_disk_cache_persistence(cache_dir):
     """Тест персистентности кэша между сессиями"""
     # Первая сессия
@@ -143,7 +141,6 @@ def test_disk_cache_ttl_expiration(cache_dir):
         plugin.close()
 
 
-@pytest.mark.skip(reason="DiskCachePlugin caching mechanism needs review")
 def test_disk_cache_different_params(cache_dir):
     """Тест кэширования запросов с разными параметрами"""
     plugin = DiskCachePlugin(cache_dir=cache_dir, ttl=60)
@@ -216,7 +213,6 @@ def test_disk_cache_custom_methods(cache_dir):
         plugin.close()
 
 
-@pytest.mark.skip(reason="DiskCachePlugin caching mechanism needs review")
 def test_disk_cache_clear(cache_dir):
     """Тест очистки кэша"""
     plugin = DiskCachePlugin(cache_dir=cache_dir, ttl=60)
@@ -246,7 +242,6 @@ def test_disk_cache_clear(cache_dir):
         plugin.close()
 
 
-@pytest.mark.skip(reason="DiskCachePlugin caching mechanism needs review")
 def test_disk_cache_delete_specific(cache_dir):
     """Тест удаления конкретной записи из кэша"""
     plugin = DiskCachePlugin(cache_dir=cache_dir, ttl=60)
@@ -307,7 +302,6 @@ def test_disk_cache_size_limit(cache_dir):
         plugin.close()
 
 
-@pytest.mark.skip(reason="DiskCachePlugin caching mechanism needs review")
 def test_disk_cache_stats(cache_dir):
     """Тест статистики кэша"""
     plugin = DiskCachePlugin(cache_dir=cache_dir, ttl=60)
