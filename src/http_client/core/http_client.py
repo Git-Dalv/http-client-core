@@ -564,6 +564,11 @@ class HTTPClient:
                         except Exception as e:
                             print(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
 
+                    # Filter out internal parameters (starting with '_') before passing to requests
+                    # These are used by plugins for internal tracking and should not be passed to requests.Session
+                    internal_params = {k: v for k, v in kwargs.items() if k.startswith('_')}
+                    clean_kwargs = {k: v for k, v in kwargs.items() if not k.startswith('_')}
+
                     # Make request (using thread-local session)
                     response = self.session.request(
                         method=method,
@@ -571,8 +576,13 @@ class HTTPClient:
                         timeout=timeout,
                         verify=self._config.security.verify_ssl,
                         allow_redirects=self._config.security.allow_redirects,
-                        **kwargs
+                        **clean_kwargs
                     )
+
+                    # Attach internal parameters to response.request for plugin access
+                    if internal_params and hasattr(response, 'request'):
+                        for key, value in internal_params.items():
+                            setattr(response.request, key, value)
 
                     # Check status
                     response.raise_for_status()
