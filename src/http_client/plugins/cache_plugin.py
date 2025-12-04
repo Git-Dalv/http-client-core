@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -9,6 +10,8 @@ from typing import Any, Dict, Optional
 import requests
 
 from .plugin import Plugin
+
+logger = logging.getLogger(__name__)
 
 
 class CachePlugin(Plugin):
@@ -57,10 +60,10 @@ class CachePlugin(Plugin):
             cache_entry = self.cache.get(cache_key)
 
             if self._is_cache_valid(cache_entry):
-                print(f"Cache HIT for {url}")
+                logger.debug(f"Cache HIT for {url}")
                 return cache_entry["response"]
 
-        print(f"Cache MISS for {url}")
+        logger.debug(f"Cache MISS for {url}")
         return None
 
     def save_to_cache(self, method: str, url: str, response: requests.Response, **kwargs: Any):
@@ -77,7 +80,7 @@ class CachePlugin(Plugin):
         """Очищает весь кэш"""
         with self._lock:
             self.cache.clear()
-        print("Cache cleared")
+        logger.info("Cache cleared")
 
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         """Проверяет кэш перед запросом"""

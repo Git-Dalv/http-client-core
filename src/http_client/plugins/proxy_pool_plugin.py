@@ -7,11 +7,14 @@
 """
 
 from typing import Any, Dict, Optional
+import logging
 import time
 import requests
 
 from .plugin import Plugin
 from ..utils.proxy_manager import ProxyPool, ProxyInfo, ProxyType, RotationStrategy
+
+logger = logging.getLogger(__name__)
 
 
 class ProxyPoolPlugin(Plugin):

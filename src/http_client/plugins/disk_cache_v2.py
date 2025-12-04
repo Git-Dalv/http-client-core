@@ -5,7 +5,14 @@ import hashlib
 import json
 from typing import Optional, Set
 import requests
-from diskcache import Cache
+
+try:
+    from diskcache import Cache
+except ImportError:
+    raise ImportError(
+        "diskcache is required for DiskCachePluginV2. "
+        "Install with: pip install http-client-core[cache]"
+    )
 
 from .base_v2 import PluginV2
 from ..core.context import RequestContext

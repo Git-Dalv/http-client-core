@@ -5,7 +5,14 @@ import time
 from typing import Any, Dict, Optional
 
 import requests
-from diskcache import Cache
+
+try:
+    from diskcache import Cache
+except ImportError:
+    raise ImportError(
+        "diskcache is required for DiskCachePlugin. "
+        "Install with: pip install http-client-core[cache]"
+    )
 
 from .plugin import Plugin
 from ..utils.serialization import serialize_response, deserialize_response

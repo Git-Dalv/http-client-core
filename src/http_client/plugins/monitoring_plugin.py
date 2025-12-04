@@ -1,10 +1,13 @@
 # src/http_client/plugins/monitoring_plugin.py
 
+import logging
 import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from .plugin import Plugin
+
+logger = logging.getLogger(__name__)
 
 
 class MonitoringPlugin(Plugin):
@@ -415,41 +418,41 @@ class MonitoringPlugin(Plugin):
         """
         metrics = self.get_metrics()
 
-        print("\n" + "=" * 60)
-        print("HTTP CLIENT MONITORING SUMMARY")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info("HTTP CLIENT MONITORING SUMMARY")
+        logger.info("=" * 60)
 
-        print("\n📊 General Statistics:")
-        print(f"  Total Requests:     {metrics['total_requests']}")
-        print(f"  Failed Requests:    {metrics['failed_requests']}")
-        print(f"  Success Rate:       {metrics['success_rate']}")
-        print(f"  Avg Response Time:  {metrics['avg_response_time']}")
+        logger.info("\n📊 General Statistics:")
+        logger.info(f"  Total Requests:     {metrics['total_requests']}")
+        logger.info(f"  Failed Requests:    {metrics['failed_requests']}")
+        logger.info(f"  Success Rate:       {metrics['success_rate']}")
+        logger.info(f"  Avg Response Time:  {metrics['avg_response_time']}")
 
         if metrics["method_stats"]:
-            print("\n🔧 Method Statistics:")
+            logger.info("\n🔧 Method Statistics:")
             for method, count in metrics["method_stats"].items():
-                print(f"  {method:8s}: {count}")
+                logger.info(f"  {method:8s}: {count}")
 
         if metrics["status_code_stats"]:
-            print("\n📡 Status Code Statistics:")
+            logger.info("\n📡 Status Code Statistics:")
             for code, count in sorted(metrics["status_code_stats"].items()):
-                print(f"  {code}: {count}")
+                logger.info(f"  {code}: {count}")
 
         if metrics["endpoint_metrics"]:
-            print("\n🎯 Top Endpoints:")
+            logger.info("\n🎯 Top Endpoints:")
             sorted_endpoints = sorted(
                 metrics["endpoint_metrics"].items(), key=lambda x: x[1]["count"], reverse=True
             )[:5]
 
             for endpoint, stats in sorted_endpoints:
-                print(f"  {endpoint}")
-                print(
+                logger.info(f"  {endpoint}")
+                logger.info(
                     f"    Requests: {stats['count']}, "
                     f"Avg Time: {stats['avg_time']:.3f}s, "
                     f"Errors: {stats['errors']}"
                 )
 
-        print("\n" + "=" * 60 + "\n")
+        logger.info("\n" + "=" * 60 + "\n")
 
     def __repr__(self) -> str:
         """Строковое представление плагина."""

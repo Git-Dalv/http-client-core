@@ -1,11 +1,14 @@
 # src/http_client/plugins/retry_plugin.py
 
+import logging
 import time
 from typing import Any, Dict
 
 import requests
 
 from .plugin import Plugin
+
+logger = logging.getLogger(__name__)
 
 
 class RetryPlugin(Plugin):
@@ -36,10 +39,10 @@ class RetryPlugin(Plugin):
         self.retry_count += 1
         if self.retry_count <= self.max_retries:
             wait_time = self.backoff_factor * (2 ** (self.retry_count - 1))
-            print(f"Retry {self.retry_count}/{self.max_retries} after {wait_time}s...")
+            logger.info(f"Retry {self.retry_count}/{self.max_retries} after {wait_time}s...")
             time.sleep(wait_time)
             return True  # Повторить запрос
         else:
-            print(f"Max retries ({self.max_retries}) reached. Giving up.")
+            logger.error(f"Max retries ({self.max_retries}) reached. Giving up.")
             self.retry_count = 0
             return False  # Выбросить исключение

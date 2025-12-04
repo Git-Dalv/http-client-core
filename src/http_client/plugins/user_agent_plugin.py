@@ -11,6 +11,7 @@
 """
 
 from typing import Any, Dict, Optional
+import logging
 import requests
 
 from .plugin import Plugin
@@ -20,6 +21,8 @@ from ..utils.user_agents import (
     OSType,
     get_random_user_agent,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class UserAgentPlugin(Plugin):
