@@ -1,5 +1,6 @@
 # src/http_client/plugins/rate_limit_plugin.py
 
+import threading
 import time
 from collections import deque
 from typing import Any, Dict
@@ -23,6 +24,7 @@ class RateLimitPlugin(Plugin):
         self.max_requests = max_requests
         self.time_window = time_window
         self.request_times = deque()
+        self._lock = threading.Lock()  # Thread-safe protection for request_times
 
     def _clean_old_requests(self):
         """Удаляет старые запросы из очереди"""
@@ -48,8 +50,9 @@ class RateLimitPlugin(Plugin):
 
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
         """Проверяет rate limit перед запросом"""
-        self._wait_if_needed()
-        self.request_times.append(time.time())
+        with self._lock:
+            self._wait_if_needed()
+            self.request_times.append(time.time())
         return kwargs
 
     def after_response(self, response: requests.Response) -> requests.Response:
@@ -58,30 +61,34 @@ class RateLimitPlugin(Plugin):
 
     def on_error(self, error: Exception, **kwargs) -> bool:
         """Обработка ошибок"""
-        if self.request_times:
-            self.request_times.pop()
+        with self._lock:
+            if self.request_times:
+                self.request_times.pop()
         return False  # Не повторять запрос
 
     def reset(self):
         """Сбрасывает счетчик запросов"""
-        self.request_times.clear()
+        with self._lock:
+            self.request_times.clear()
         print("Rate limit counter reset")
 
     def get_remaining_requests(self) -> int:
         """Возвращает количество оставшихся запросов"""
-        self._clean_old_requests()
-        return max(0, self.max_requests - len(self.request_times))
+        with self._lock:
+            self._clean_old_requests()
+            return max(0, self.max_requests - len(self.request_times))
 
     def get_reset_time(self) -> float:
         """Возвращает время до сброса лимита в секундах"""
-        if not self.request_times:
-            return 0.0
+        with self._lock:
+            if not self.request_times:
+                return 0.0
 
-        self._clean_old_requests()
+            self._clean_old_requests()
 
-        if len(self.request_times) < self.max_requests:
-            return 0.0
+            if len(self.request_times) < self.max_requests:
+                return 0.0
 
-        oldest_request = self.request_times[0]
-        reset_time = self.time_window - (time.time() - oldest_request)
-        return max(0.0, reset_time)
+            oldest_request = self.request_times[0]
+            reset_time = self.time_window - (time.time() - oldest_request)
+            return max(0.0, reset_time)

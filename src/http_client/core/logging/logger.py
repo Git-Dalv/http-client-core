@@ -11,6 +11,7 @@ from .config import LoggingConfig, LogLevel, LogFormat
 from .formatters import get_formatter
 from .filters import CorrelationIdFilter, ExtraFieldsFilter
 from .handlers import create_console_handler, create_file_handler
+from ...utils.sanitizer import mask_sensitive_data
 
 
 class HTTPClientLogger:
@@ -118,7 +119,8 @@ class HTTPClientLogger:
         Example:
             >>> logger.debug("Processing data", item_count=100)
         """
-        self._logger.debug(message, extra=kwargs)
+        sanitized_kwargs = mask_sensitive_data(kwargs)
+        self._logger.debug(message, extra=sanitized_kwargs)
 
     def info(self, message: str, **kwargs: Any) -> None:
         """
@@ -131,7 +133,8 @@ class HTTPClientLogger:
         Example:
             >>> logger.info("Request completed", status_code=200, duration_ms=150)
         """
-        self._logger.info(message, extra=kwargs)
+        sanitized_kwargs = mask_sensitive_data(kwargs)
+        self._logger.info(message, extra=sanitized_kwargs)
 
     def warning(self, message: str, **kwargs: Any) -> None:
         """
@@ -144,7 +147,8 @@ class HTTPClientLogger:
         Example:
             >>> logger.warning("Slow response", duration_ms=5000)
         """
-        self._logger.warning(message, extra=kwargs)
+        sanitized_kwargs = mask_sensitive_data(kwargs)
+        self._logger.warning(message, extra=sanitized_kwargs)
 
     def error(self, message: str, **kwargs: Any) -> None:
         """
@@ -157,7 +161,8 @@ class HTTPClientLogger:
         Example:
             >>> logger.error("Request failed", status_code=500, error="Internal Server Error")
         """
-        self._logger.error(message, extra=kwargs)
+        sanitized_kwargs = mask_sensitive_data(kwargs)
+        self._logger.error(message, extra=sanitized_kwargs)
 
     def critical(self, message: str, **kwargs: Any) -> None:
         """
@@ -170,7 +175,8 @@ class HTTPClientLogger:
         Example:
             >>> logger.critical("Service unavailable", service="database")
         """
-        self._logger.critical(message, extra=kwargs)
+        sanitized_kwargs = mask_sensitive_data(kwargs)
+        self._logger.critical(message, extra=sanitized_kwargs)
 
     def exception(self, message: str, **kwargs: Any) -> None:
         """
@@ -188,7 +194,8 @@ class HTTPClientLogger:
             ... except Exception:
             ...     logger.exception("Operation failed", operation="risky_operation")
         """
-        self._logger.exception(message, extra=kwargs)
+        sanitized_kwargs = mask_sensitive_data(kwargs)
+        self._logger.exception(message, extra=sanitized_kwargs)
 
     def close(self) -> None:
         """

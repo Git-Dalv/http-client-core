@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 import time
 import warnings
 import threading
+import weakref
+import atexit
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -49,6 +51,41 @@ def get_current_request_context() -> Optional[Dict[str, Any]]:
         ...     params = context['kwargs'].get('params', {})
     """
     return getattr(_request_context, 'data', None)
+
+
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Рекурсивное слияние словарей (deep merge).
+
+    Используется для корректного объединения kwargs из нескольких плагинов,
+    чтобы не терять вложенные значения (например, headers).
+
+    Args:
+        base: Базовый словарь
+        override: Словарь с переопределениями
+
+    Returns:
+        Новый словарь с объединенными значениями
+
+    Example:
+        >>> base = {"headers": {"Authorization": "Bearer token"}, "timeout": 30}
+        >>> override = {"headers": {"X-Custom": "value"}, "params": {"page": 1}}
+        >>> result = _deep_merge(base, override)
+        >>> # result = {
+        ...     "headers": {"Authorization": "Bearer token", "X-Custom": "value"},
+        ...     "timeout": 30,
+        ...     "params": {"page": 1}
+        ... }
+    """
+    result = base.copy()
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            # Рекурсивное слияние для вложенных словарей
+            result[key] = _deep_merge(result[key], value)
+        else:
+            # Простое переопределение для остальных типов
+            result[key] = value
+    return result
 
 
 class HTTPClient:
@@ -148,6 +185,10 @@ class HTTPClient:
         object.__setattr__(self, '_proxies', config.proxies if config.proxies else None)
         object.__setattr__(self, '_verify_ssl', config.security.verify_ssl)
 
+        # Graceful shutdown: weak reference for __del__ and atexit cleanup
+        object.__setattr__(self, '_weak_self', weakref.ref(self))
+        atexit.register(self._atexit_cleanup)
+
         object.__setattr__(self, '_initialized', True)
 
     def __setattr__(self, name, value):
@@ -217,6 +258,44 @@ class HTTPClient:
         # Then close sessions
         if hasattr(self, "_session_manager"):
             self._session_manager.close_all()
+
+    def __del__(self):
+        """
+        Деструктор с предупреждением о незакрытых ресурсах.
+
+        Автоматически вызывает close() при garbage collection,
+        но выдает ResourceWarning если сессии не были закрыты явно.
+
+        Best practice: использовать context manager или явно вызывать close()
+        """
+        try:
+            # Check if session manager exists and has active sessions
+            if hasattr(self, "_session_manager"):
+                count = self._session_manager.get_active_sessions_count()
+                if count > 0:
+                    warnings.warn(
+                        f"HTTPClient garbage collected with {count} unclosed session(s). "
+                        "Use 'with HTTPClient() as client:' or call client.close() explicitly. "
+                        "Unclosed sessions may leak resources and file descriptors.",
+                        ResourceWarning,
+                        stacklevel=2
+                    )
+                    # Auto-close to prevent resource leaks
+                    self.close()
+        except Exception:
+            # Ignore errors during garbage collection
+            # (may occur if Python is shutting down)
+            pass
+
+    def _atexit_cleanup(self):
+        """Graceful shutdown при завершении программы."""
+        try:
+            client = self._weak_self()
+            if client is not None:
+                client.close()
+        except Exception:
+            # Ignore errors during program termination
+            pass
 
     # ==================== Управление плагинами ====================
 
@@ -548,8 +627,8 @@ class HTTPClient:
                                 if result is not None:
                                     # Short-circuit with response from plugin
                                     return result
-                                # Apply modified kwargs from context
-                                kwargs.update(ctx.kwargs)
+                                # Apply modified kwargs from context (deep merge for nested dicts like headers)
+                                kwargs = _deep_merge(kwargs, ctx.kwargs)
                             else:
                                 # V1 API - legacy support
                                 result = plugin.before_request(method=method, url=url, **kwargs)
@@ -559,8 +638,8 @@ class HTTPClient:
                                     if '__cached_response__' in result:
                                         # Return cached response immediately, skip HTTP call
                                         return result['__cached_response__']
-                                    # Update kwargs with plugin modifications
-                                    kwargs.update(result)
+                                    # Update kwargs with plugin modifications (deep merge for nested dicts like headers)
+                                    kwargs = _deep_merge(kwargs, result)
                         except Exception as e:
                             print(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
 
@@ -627,14 +706,15 @@ class HTTPClient:
                                         break
                                     uncompressed_size += len(chunk)
 
-                                    # Check ratio on the fly
+                                    # Check ratio on the fly (защита от decompression bomb)
                                     if compressed_size > 0:
                                         ratio = uncompressed_size / compressed_size
-                                        if ratio > 100:  # 100:1 compression ratio is suspicious
+                                        if ratio > self._config.security.max_compression_ratio:
                                             raise DecompressionBombError(
                                                 f"Potential decompression bomb detected: "
                                                 f"ratio {ratio:.1f}:1 (compressed: {compressed_size}, "
-                                                f"uncompressed: {uncompressed_size}+)",
+                                                f"uncompressed: {uncompressed_size}+) "
+                                                f"exceeds max allowed ratio {self._config.security.max_compression_ratio}:1",
                                                 url=url
                                             )
 

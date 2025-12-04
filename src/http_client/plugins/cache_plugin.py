@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import threading
 import time
 from typing import Any, Dict, Optional
 
@@ -20,6 +21,7 @@ class CachePlugin(Plugin):
         """
         self.ttl = ttl
         self.cache: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.RLock()  # Thread-safe protection for cache operations
 
     def _generate_cache_key(self, method: str, url: str, **kwargs: Any) -> str:
         """Генерирует уникальный ключ для кэша"""
@@ -50,11 +52,13 @@ class CachePlugin(Plugin):
             return None
 
         cache_key = self._generate_cache_key(method, url, **kwargs)
-        cache_entry = self.cache.get(cache_key)
 
-        if self._is_cache_valid(cache_entry):
-            print(f"Cache HIT for {url}")
-            return cache_entry["response"]
+        with self._lock:
+            cache_entry = self.cache.get(cache_key)
+
+            if self._is_cache_valid(cache_entry):
+                print(f"Cache HIT for {url}")
+                return cache_entry["response"]
 
         print(f"Cache MISS for {url}")
         return None
@@ -66,11 +70,13 @@ class CachePlugin(Plugin):
             return
 
         cache_key = self._generate_cache_key(method, url, **kwargs)
-        self.cache[cache_key] = {"response": response, "timestamp": time.time()}
+        with self._lock:
+            self.cache[cache_key] = {"response": response, "timestamp": time.time()}
 
     def clear_cache(self):
         """Очищает весь кэш"""
-        self.cache.clear()
+        with self._lock:
+            self.cache.clear()
         print("Cache cleared")
 
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
