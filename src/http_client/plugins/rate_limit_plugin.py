@@ -1,5 +1,6 @@
 # src/http_client/plugins/rate_limit_plugin.py
 
+import logging
 import threading
 import time
 from collections import deque
@@ -8,6 +9,8 @@ from typing import Any, Dict
 import requests
 
 from .plugin import Plugin
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimitPlugin(Plugin):
@@ -44,7 +47,7 @@ class RateLimitPlugin(Plugin):
             wait_time = self.time_window - (time.time() - oldest_request)
 
             if wait_time > 0:
-                print(f"Rate limit reached. Waiting {wait_time:.2f} seconds...")
+                logger.warning(f"Rate limit reached. Waiting {wait_time:.2f} seconds...")
                 time.sleep(wait_time)
                 self._clean_old_requests()
 
@@ -70,7 +73,7 @@ class RateLimitPlugin(Plugin):
         """Сбрасывает счетчик запросов"""
         with self._lock:
             self.request_times.clear()
-        print("Rate limit counter reset")
+        logger.info("Rate limit counter reset")
 
     def get_remaining_requests(self) -> int:
         """Возвращает количество оставшихся запросов"""
