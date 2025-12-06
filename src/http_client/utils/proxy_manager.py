@@ -10,6 +10,7 @@
 """
 
 import random
+import threading
 import time
 from typing import List, Optional, Dict, Any, Literal
 from dataclasses import dataclass, field
@@ -170,6 +171,8 @@ class ProxyPool:
         self._total_successes = 0
         self._total_failures = 0
 
+        self._lock = threading.RLock()  # Thread-safe protection for proxy pool operations
+
     # ==================== Управление прокси ====================
 
     def add_proxy(
@@ -212,16 +215,17 @@ class ProxyPool:
             **{k: v for k, v in metadata.items() if k in ["country", "region", "speed"]}
         )
 
-        # Проверяем дубликаты
-        if any(p.host == host and p.port == port for p in self._proxies):
-            raise ValueError(f"Proxy {host}:{port} already exists in pool")
+        with self._lock:
+            # Проверяем дубликаты
+            if any(p.host == host and p.port == port for p in self._proxies):
+                raise ValueError(f"Proxy {host}:{port} already exists in pool")
 
-        # Проверяем работоспособность если включено
-        if self._check_on_add:
-            if not self._check_proxy(proxy):
-                raise ValueError(f"Proxy {host}:{port} is not working")
+            # Проверяем работоспособность если включено
+            if self._check_on_add:
+                if not self._check_proxy(proxy):
+                    raise ValueError(f"Proxy {host}:{port} is not working")
 
-        self._proxies.append(proxy)
+            self._proxies.append(proxy)
         return proxy
 
     def add_proxies_from_list(
@@ -293,16 +297,18 @@ class ProxyPool:
         Returns:
             True если прокси был удален, False если не найден
         """
-        for i, proxy in enumerate(self._proxies):
-            if proxy.host == host and proxy.port == port:
-                self._proxies.pop(i)
-                return True
-        return False
+        with self._lock:
+            for i, proxy in enumerate(self._proxies):
+                if proxy.host == host and proxy.port == port:
+                    self._proxies.pop(i)
+                    return True
+            return False
 
     def clear(self):
         """Удаляет все прокси из пула"""
-        self._proxies.clear()
-        self._current_index = 0
+        with self._lock:
+            self._proxies.clear()
+            self._current_index = 0
 
     # ==================== Получение прокси ====================
 
@@ -326,23 +332,24 @@ class ProxyPool:
             proxy = pool.get_proxy(country="US")
             proxy = pool.get_proxy(proxy_type="socks5")
         """
-        # Фильтруем прокси
-        available = self._get_available_proxies(country=country, proxy_type=proxy_type)
+        with self._lock:
+            # Фильтруем прокси
+            available = self._get_available_proxies(country=country, proxy_type=proxy_type)
 
-        if not available:
-            return None
+            if not available:
+                return None
 
-        # Выбираем согласно стратегии
-        if self._rotation_strategy == "round_robin":
-            proxy = self._round_robin_select(available)
-        elif self._rotation_strategy == "random":
-            proxy = random.choice(available)
-        elif self._rotation_strategy == "weighted":
-            proxy = self._weighted_select(available)
-        else:
-            proxy = available[0]
+            # Выбираем согласно стратегии
+            if self._rotation_strategy == "round_robin":
+                proxy = self._round_robin_select(available)
+            elif self._rotation_strategy == "random":
+                proxy = random.choice(available)
+            elif self._rotation_strategy == "weighted":
+                proxy = self._weighted_select(available)
+            else:
+                proxy = available[0]
 
-        return proxy
+            return proxy
 
     def _get_available_proxies(
             self,
@@ -384,9 +391,10 @@ class ProxyPool:
             proxy: ProxyInfo объект
             response_time: Время ответа в секундах
         """
-        proxy.record_success(response_time)
-        self._total_requests += 1
-        self._total_successes += 1
+        with self._lock:
+            proxy.record_success(response_time)
+            self._total_requests += 1
+            self._total_successes += 1
 
     def record_failure(self, proxy: ProxyInfo):
         """
@@ -395,9 +403,10 @@ class ProxyPool:
         Args:
             proxy: ProxyInfo объект
         """
-        proxy.record_failure()
-        self._total_requests += 1
-        self._total_failures += 1
+        with self._lock:
+            proxy.record_failure()
+            self._total_requests += 1
+            self._total_failures += 1
 
         # Удаляем если нужно
         if self._auto_remove_failed and not proxy.is_working:
@@ -452,7 +461,10 @@ class ProxyPool:
         working = 0
         failed = 0
 
-        for proxy in self._proxies[:]:  # Копия списка для безопасного удаления
+        with self._lock:
+            proxies_snapshot = self._proxies[:]  # Копия списка для безопасного удаления
+
+        for proxy in proxies_snapshot:
             if self._check_proxy(proxy):
                 working += 1
             else:
@@ -475,22 +487,23 @@ class ProxyPool:
         Returns:
             Словарь со статистикой
         """
-        available = self._get_available_proxies()
+        with self._lock:
+            available = self._get_available_proxies()
 
-        return {
-            "total_proxies": len(self._proxies),
-            "available_proxies": len(available),
-            "working_proxies": sum(1 for p in self._proxies if p.is_working),
-            "failed_proxies": sum(1 for p in self._proxies if not p.is_working),
-            "total_requests": self._total_requests,
-            "total_successes": self._total_successes,
-            "total_failures": self._total_failures,
-            "overall_success_rate": (
-                self._total_successes / self._total_requests
-                if self._total_requests > 0 else 0.0
-            ),
-            "rotation_strategy": self._rotation_strategy,
-        }
+            return {
+                "total_proxies": len(self._proxies),
+                "available_proxies": len(available),
+                "working_proxies": sum(1 for p in self._proxies if p.is_working),
+                "failed_proxies": sum(1 for p in self._proxies if not p.is_working),
+                "total_requests": self._total_requests,
+                "total_successes": self._total_successes,
+                "total_failures": self._total_failures,
+                "overall_success_rate": (
+                    self._total_successes / self._total_requests
+                    if self._total_requests > 0 else 0.0
+                ),
+                "rotation_strategy": self._rotation_strategy,
+            }
 
     def get_proxy_stats(self) -> List[Dict[str, Any]]:
         """
@@ -499,31 +512,34 @@ class ProxyPool:
         Returns:
             Список словарей с информацией о каждом прокси
         """
-        return [
-            {
-                "host": p.host,
-                "port": p.port,
-                "type": p.proxy_type,
-                "is_working": p.is_working,
-                "success_rate": p.success_rate,
-                "success_count": p.success_count,
-                "failure_count": p.failure_count,
-                "avg_response_time": p.average_response_time,
-                "last_used": p.last_used,
-                "country": p.country,
-            }
-            for p in self._proxies
-        ]
+        with self._lock:
+            return [
+                {
+                    "host": p.host,
+                    "port": p.port,
+                    "type": p.proxy_type,
+                    "is_working": p.is_working,
+                    "success_rate": p.success_rate,
+                    "success_count": p.success_count,
+                    "failure_count": p.failure_count,
+                    "avg_response_time": p.average_response_time,
+                    "last_used": p.last_used,
+                    "country": p.country,
+                }
+                for p in self._proxies
+            ]
 
     # ==================== Утилиты ====================
 
     def __len__(self) -> int:
         """Возвращает количество прокси в пуле"""
-        return len(self._proxies)
+        with self._lock:
+            return len(self._proxies)
 
     def __bool__(self) -> bool:
         """Возвращает True если есть хотя бы один прокси"""
-        return len(self._proxies) > 0
+        with self._lock:
+            return len(self._proxies) > 0
 
     def __repr__(self) -> str:
         available = len(self._get_available_proxies())
