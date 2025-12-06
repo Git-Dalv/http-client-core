@@ -15,6 +15,7 @@ import time
 from typing import List, Optional, Dict, Any, Literal
 from dataclasses import dataclass, field
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 
@@ -145,7 +146,7 @@ class ProxyPool:
             auto_remove_failed: bool = True,
             check_on_add: bool = False,
             check_timeout: float = 5.0,
-            check_url: str = "http://httpbin.org/ip",
+            check_url: str = "https://www.google.com/generate_204",
     ):
         """
         Инициализация пула прокси.
@@ -433,7 +434,8 @@ class ProxyPool:
             )
             response_time = time.time() - start_time
 
-            if response.status_code == 200:
+            # Считаем успешным любой HTTP код < 500 (не ошибка сервера)
+            if response.status_code < 500:
                 proxy.record_success(response_time)
                 proxy.last_check = time.time()
                 return True
@@ -447,9 +449,12 @@ class ProxyPool:
             proxy.last_check = time.time()
             return False
 
-    def check_all_proxies(self) -> Dict[str, int]:
+    def check_all_proxies(self, max_workers: int = 10) -> Dict[str, int]:
         """
-        Проверяет все прокси в пуле.
+        Проверяет все прокси в пуле (параллельно с использованием ThreadPoolExecutor).
+
+        Args:
+            max_workers: Максимальное количество параллельных проверок
 
         Returns:
             Словарь с результатами: {"working": X, "failed": Y, "total": Z}
@@ -464,13 +469,29 @@ class ProxyPool:
         with self._lock:
             proxies_snapshot = self._proxies[:]  # Копия списка для безопасного удаления
 
-        for proxy in proxies_snapshot:
-            if self._check_proxy(proxy):
-                working += 1
-            else:
-                failed += 1
-                if self._auto_remove_failed and not proxy.is_working:
-                    self.remove_proxy(proxy.host, proxy.port)
+        # Параллельная проверка прокси с ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Запускаем проверку для каждого прокси
+            future_to_proxy = {
+                executor.submit(self._check_proxy, proxy): proxy
+                for proxy in proxies_snapshot
+            }
+
+            # Обрабатываем результаты по мере завершения
+            for future in as_completed(future_to_proxy):
+                proxy = future_to_proxy[future]
+                try:
+                    if future.result():
+                        working += 1
+                    else:
+                        failed += 1
+                        if self._auto_remove_failed and not proxy.is_working:
+                            self.remove_proxy(proxy.host, proxy.port)
+                except Exception:
+                    # Если произошла ошибка при проверке
+                    failed += 1
+                    if self._auto_remove_failed and not proxy.is_working:
+                        self.remove_proxy(proxy.host, proxy.port)
 
         return {
             "working": working,
