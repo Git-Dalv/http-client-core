@@ -5,7 +5,7 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Set
 
 import requests
 
@@ -13,28 +13,72 @@ from .plugin import Plugin
 
 logger = logging.getLogger(__name__)
 
+# Заголовки, которые по умолчанию влияют на кэш ключ
+DEFAULT_CACHE_HEADERS = {
+    'Accept',
+    'Accept-Language',
+    'Accept-Encoding',
+    'Content-Type',
+}
+
 
 class CachePlugin(Plugin):
     """Плагин для кэширования HTTP ответов"""
 
-    def __init__(self, ttl: int = 300):
+    def __init__(
+            self,
+            ttl: int = 300,
+            cache_headers: Optional[Set[str]] = None,
+            include_auth_header: bool = False,
+    ):
         """
         Args:
             ttl: Time to live для кэша в секундах (по умолчанию 5 минут)
+            cache_headers: Набор заголовков для включения в ключ кэша (case-insensitive).
+                          По умолчанию: Accept, Accept-Language, Accept-Encoding, Content-Type
+            include_auth_header: Включать ли Authorization заголовок в ключ кэша
         """
         self.ttl = ttl
         self.cache: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.RLock()  # Thread-safe protection for cache operations
 
+        # Используем пользовательский набор заголовков или дефолтный
+        self.cache_headers = cache_headers if cache_headers is not None else DEFAULT_CACHE_HEADERS.copy()
+
+        # Добавляем Authorization если требуется
+        if include_auth_header:
+            self.cache_headers.add('Authorization')
+
+        # Приводим все заголовки к lowercase для case-insensitive сравнения
+        self.cache_headers = {h.lower() for h in self.cache_headers}
+
     def _generate_cache_key(self, method: str, url: str, **kwargs: Any) -> str:
-        """Генерирует уникальный ключ для кэша"""
-        # Создаем строку из метода, URL и параметров
+        """
+        Генерирует уникальный ключ для кэша на основе:
+        - HTTP метода
+        - URL
+        - Query параметров
+        - JSON тела запроса
+        - Значимых HTTP заголовков (настраиваемых)
+        """
+        # Извлекаем значимые заголовки из kwargs
+        request_headers = kwargs.get("headers", {})
+        significant_headers = {}
+
+        # Включаем только заголовки из списка cache_headers (case-insensitive)
+        for header_name, header_value in request_headers.items():
+            if header_name.lower() in self.cache_headers:
+                significant_headers[header_name.lower()] = header_value
+
+        # Создаем структуру для кэша с методом, URL, параметрами и заголовками
         cache_data = {
             "method": method,
             "url": url,
             "params": kwargs.get("params", {}),
             "json": kwargs.get("json", {}),
+            "headers": significant_headers,  # Добавляем значимые заголовки
         }
+
         cache_string = json.dumps(cache_data, sort_keys=True)
         return hashlib.md5(cache_string.encode()).hexdigest()
 

@@ -19,6 +19,15 @@ from ..core.context import RequestContext
 from ..utils.serialization import serialize_response, deserialize_response
 
 
+# Заголовки, которые по умолчанию влияют на кэш ключ
+DEFAULT_CACHE_HEADERS = {
+    'Accept',
+    'Accept-Language',
+    'Accept-Encoding',
+    'Content-Type',
+}
+
+
 class DiskCachePluginV2(PluginV2):
     """Disk-based HTTP cache using diskcache library (v2 API).
 
@@ -48,7 +57,9 @@ class DiskCachePluginV2(PluginV2):
         cache_dir: str,
         ttl: int = 3600,
         max_size: Optional[int] = None,
-        cacheable_methods: Optional[Set[str]] = None
+        cacheable_methods: Optional[Set[str]] = None,
+        cache_headers: Optional[Set[str]] = None,
+        include_auth_header: bool = False,
     ):
         """Initialize disk cache plugin.
 
@@ -57,6 +68,9 @@ class DiskCachePluginV2(PluginV2):
             ttl: Time to live in seconds (default 1 hour)
             max_size: Maximum cache size in bytes (None = unlimited)
             cacheable_methods: HTTP methods to cache (default: GET, HEAD)
+            cache_headers: Набор заголовков для включения в ключ кэша (case-insensitive).
+                          По умолчанию: Accept, Accept-Language, Accept-Encoding, Content-Type
+            include_auth_header: Включать ли Authorization заголовок в ключ кэша
         """
         actual_size_limit = max_size if max_size is not None else 2**30  # 1 GB default
         self.cache = Cache(cache_dir, size_limit=actual_size_limit, eviction_policy="least-recently-used")
@@ -65,6 +79,16 @@ class DiskCachePluginV2(PluginV2):
         self.max_size = max_size
         self.cacheable_methods = cacheable_methods or {'GET', 'HEAD'}
         self.stats = {'hits': 0, 'misses': 0}
+
+        # Используем пользовательский набор заголовков или дефолтный
+        self.cache_headers = cache_headers if cache_headers is not None else DEFAULT_CACHE_HEADERS.copy()
+
+        # Добавляем Authorization если требуется
+        if include_auth_header:
+            self.cache_headers.add('Authorization')
+
+        # Приводим все заголовки к lowercase для case-insensitive сравнения
+        self.cache_headers = {h.lower() for h in self.cache_headers}
 
     def before_request(self, ctx: RequestContext) -> Optional[requests.Response]:
         """Check cache before making request."""
@@ -138,11 +162,29 @@ class DiskCachePluginV2(PluginV2):
         return response
 
     def _generate_cache_key(self, ctx: RequestContext) -> str:
-        """Generate stable cache key from context."""
+        """
+        Generate stable cache key from context, including:
+        - HTTP method
+        - URL
+        - Query parameters
+        - Significant HTTP headers (configurable)
+        """
         params = ctx.kwargs.get('params', {})
         params_str = json.dumps(params, sort_keys=True) if params else ''
 
-        key_source = f"{ctx.method}:{ctx.url}:{params_str}"
+        # Извлекаем значимые заголовки
+        request_headers = ctx.kwargs.get('headers', {})
+        significant_headers = {}
+
+        # Включаем только заголовки из списка cache_headers (case-insensitive)
+        for header_name, header_value in request_headers.items():
+            if header_name.lower() in self.cache_headers:
+                significant_headers[header_name.lower()] = header_value
+
+        headers_str = json.dumps(significant_headers, sort_keys=True) if significant_headers else ''
+
+        # Генерируем ключ с включением заголовков
+        key_source = f"{ctx.method}:{ctx.url}:{params_str}:{headers_str}"
         return hashlib.sha256(key_source.encode('utf-8')).hexdigest()
 
     def clear(self) -> None:
