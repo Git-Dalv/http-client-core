@@ -28,19 +28,24 @@ class CachePlugin(Plugin):
     def __init__(
             self,
             ttl: int = 300,
+            max_size: int = 1000,
             cache_headers: Optional[Set[str]] = None,
             include_auth_header: bool = False,
     ):
         """
         Args:
             ttl: Time to live для кэша в секундах (по умолчанию 5 минут)
+            max_size: Максимальное количество записей в кэше (по умолчанию 1000)
             cache_headers: Набор заголовков для включения в ключ кэша (case-insensitive).
                           По умолчанию: Accept, Accept-Language, Accept-Encoding, Content-Type
             include_auth_header: Включать ли Authorization заголовок в ключ кэша
         """
         self.ttl = ttl
+        self.max_size = max_size
         self.cache: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.RLock()  # Thread-safe protection for cache operations
+        self._hits = 0
+        self._misses = 0
 
         # Используем пользовательский набор заголовков или дефолтный
         self.cache_headers = cache_headers if cache_headers is not None else DEFAULT_CACHE_HEADERS.copy()
@@ -92,6 +97,31 @@ class CachePlugin(Plugin):
 
         return (current_time - cached_time) < self.ttl
 
+    def _evict_if_needed(self):
+        """
+        Удаляет старые записи если кэш превысил max_size.
+        Использует LRU стратегию (удаляет самые старые по timestamp).
+
+        Должен вызываться внутри lock!
+        """
+        if len(self.cache) < self.max_size:
+            return
+
+        # Удаляем 10% самых старых записей для амортизации
+        entries_to_remove = max(1, len(self.cache) // 10)
+
+        # Сортируем по timestamp (самые старые первые)
+        sorted_keys = sorted(
+            self.cache.keys(),
+            key=lambda k: self.cache[k].get("timestamp", 0)
+        )
+
+        # Удаляем старые записи
+        for key in sorted_keys[:entries_to_remove]:
+            del self.cache[key]
+
+        logger.debug(f"Cache eviction: removed {entries_to_remove} entries, size now {len(self.cache)}")
+
     def get_from_cache(self, method: str, url: str, **kwargs: Any) -> Optional[requests.Response]:
         """Получает ответ из кэша, если он есть и актуален"""
         # Кэшируем только GET запросы
@@ -104,9 +134,11 @@ class CachePlugin(Plugin):
             cache_entry = self.cache.get(cache_key)
 
             if self._is_cache_valid(cache_entry):
+                self._hits += 1
                 logger.debug(f"Cache HIT for {url}")
                 return cache_entry["response"]
 
+        self._misses += 1
         logger.debug(f"Cache MISS for {url}")
         return None
 
@@ -118,6 +150,7 @@ class CachePlugin(Plugin):
 
         cache_key = self._generate_cache_key(method, url, **kwargs)
         with self._lock:
+            self._evict_if_needed()
             self.cache[cache_key] = {"response": response, "timestamp": time.time()}
 
     def clear_cache(self):
@@ -142,6 +175,22 @@ class CachePlugin(Plugin):
                 **self._last_request["kwargs"],
             )
         return response
+
+    @property
+    def size(self) -> int:
+        """Текущее количество записей в кэше."""
+        with self._lock:
+            return len(self.cache)
+
+    @property
+    def hits(self) -> int:
+        """Количество cache hits (для совместимости с примерами)."""
+        return self._hits
+
+    @property
+    def misses(self) -> int:
+        """Количество cache misses (для совместимости с примерами)."""
+        return self._misses
 
     def on_error(self, error: Exception, **kwargs) -> bool:
         """Обработка ошибок"""
