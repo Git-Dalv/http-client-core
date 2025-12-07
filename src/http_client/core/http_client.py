@@ -297,6 +297,119 @@ class HTTPClient:
             # Ignore errors during program termination
             pass
 
+    def health_check(self, test_url: Optional[str] = None, timeout: float = 5.0) -> Dict[str, Any]:
+        """
+        Проверяет состояние клиента и возвращает диагностическую информацию.
+
+        Полезно для:
+        - Health endpoints в веб-приложениях
+        - Мониторинга состояния клиента
+        - Диагностики проблем с соединением
+
+        Args:
+            test_url: URL для проверки соединения (опционально).
+                      Если указан, выполняется HEAD запрос.
+            timeout: Таймаут для тестового запроса (секунды)
+
+        Returns:
+            Словарь с диагностической информацией:
+            {
+                "healthy": bool,           # Общий статус здоровья
+                "base_url": str | None,    # Базовый URL клиента
+                "active_sessions": int,    # Количество активных сессий
+                "plugins_count": int,      # Количество подключенных плагинов
+                "plugins": list[str],      # Имена плагинов
+                "config": {                # Краткая информация о конфиге
+                    "timeout_connect": float,
+                    "timeout_read": float,
+                    "max_retries": int,
+                    "verify_ssl": bool,
+                },
+                "connectivity": {          # Только если test_url указан
+                    "url": str,
+                    "reachable": bool,
+                    "response_time_ms": float | None,
+                    "status_code": int | None,
+                    "error": str | None,
+                } | None,
+            }
+
+        Example:
+            >>> client = HTTPClient(base_url="https://api.example.com")
+            >>> health = client.health_check()
+            >>> print(health["healthy"])
+            True
+
+            >>> # С проверкой соединения
+            >>> health = client.health_check(test_url="https://api.example.com/health")
+            >>> print(health["connectivity"]["reachable"])
+            True
+        """
+        result = {
+            "healthy": True,
+            "base_url": self.base_url,
+            "active_sessions": 0,
+            "plugins_count": len(self._plugins),
+            "plugins": [p.__class__.__name__ for p in self._plugins],
+            "config": {
+                "timeout_connect": self._config.timeout.connect,
+                "timeout_read": self._config.timeout.read,
+                "max_retries": self._config.retry.max_attempts,
+                "verify_ssl": self._config.security.verify_ssl,
+            },
+            "connectivity": None,
+        }
+
+        # Получаем количество активных сессий
+        try:
+            result["active_sessions"] = self._session_manager.get_active_sessions_count()
+        except Exception:
+            result["active_sessions"] = -1  # Ошибка получения
+
+        # Проверка соединения если указан test_url
+        if test_url:
+            connectivity = {
+                "url": test_url,
+                "reachable": False,
+                "response_time_ms": None,
+                "status_code": None,
+                "error": None,
+            }
+
+            try:
+                start_time = time.time()
+
+                # Используем HEAD для минимальной нагрузки
+                response = self.session.head(
+                    test_url,
+                    timeout=timeout,
+                    verify=self._config.security.verify_ssl,
+                    allow_redirects=True,
+                )
+
+                response_time = (time.time() - start_time) * 1000  # ms
+
+                connectivity["reachable"] = True
+                connectivity["response_time_ms"] = round(response_time, 2)
+                connectivity["status_code"] = response.status_code
+
+            except requests.exceptions.Timeout:
+                connectivity["error"] = "Connection timeout"
+                result["healthy"] = False
+            except requests.exceptions.ConnectionError as e:
+                connectivity["error"] = f"Connection error: {str(e)[:100]}"
+                result["healthy"] = False
+            except requests.exceptions.RequestException as e:
+                connectivity["error"] = f"Request error: {str(e)[:100]}"
+                result["healthy"] = False
+            except Exception as e:
+                connectivity["error"] = f"Unexpected error: {str(e)[:100]}"
+                result["healthy"] = False
+
+            result["connectivity"] = connectivity
+
+        return result
+
     # ==================== Управление плагинами ====================
 
     def add_plugin(self, plugin: Plugin):
