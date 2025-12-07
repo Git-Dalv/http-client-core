@@ -1,6 +1,14 @@
 """HTTP Client Library - Production-ready HTTP client with plugins."""
 
 from .core.http_client import HTTPClient
+
+# Опциональный импорт AsyncHTTPClient (требует httpx)
+try:
+    from .async_client import AsyncHTTPClient
+    _HAS_ASYNC = True
+except ImportError:
+    _HAS_ASYNC = False
+    AsyncHTTPClient = None  # type: ignore
 from .core.config import (
     HTTPClientConfig,
     TimeoutConfig,
@@ -39,6 +47,7 @@ __license__ = "MIT"
 __all__ = [
     # Core
     "HTTPClient",
+    "AsyncHTTPClient",
 
     # Config
     "HTTPClientConfig",
