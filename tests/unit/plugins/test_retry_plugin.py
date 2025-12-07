@@ -218,29 +218,29 @@ class TestRetryPluginOnError:
         assert plugin.retry_count == 0
 
     @patch("time.sleep")
-    @patch("builtins.print")
-    def test_on_error_prints_retry_message(self, mock_print, mock_sleep):
-        """Test that on_error prints retry messages."""
+    @patch("src.http_client.plugins.retry_plugin.logger")
+    def test_on_error_logs_retry_message(self, mock_logger, mock_sleep):
+        """Test that on_error logs retry messages."""
         plugin = RetryPlugin(max_retries=3, backoff_factor=1.0)
         error = HTTPClientException("Server error")
 
         plugin.on_error(error)
 
-        # Should print "Retry 1/3 after 1.0s..."
-        mock_print.assert_called_with("Retry 1/3 after 1.0s...")
+        # Should log "Retry 1/3 after 1.0s..."
+        mock_logger.info.assert_called_with("Retry 1/3 after 1.0s...")
 
     @patch("time.sleep")
-    @patch("builtins.print")
-    def test_on_error_prints_max_retries_message(self, mock_print, mock_sleep):
-        """Test that on_error prints max retries message."""
+    @patch("src.http_client.plugins.retry_plugin.logger")
+    def test_on_error_logs_max_retries_message(self, mock_logger, mock_sleep):
+        """Test that on_error logs max retries message."""
         plugin = RetryPlugin(max_retries=1)
         error = HTTPClientException("Server error")
 
         plugin.on_error(error)  # First retry
         plugin.on_error(error)  # Exceeds max_retries
 
-        # Should print "Max retries (1) reached. Giving up."
-        mock_print.assert_called_with("Max retries (1) reached. Giving up.")
+        # Should log "Max retries (1) reached. Giving up."
+        mock_logger.error.assert_called_with("Max retries (1) reached. Giving up.")
 
     @patch("time.sleep")
     def test_on_error_with_zero_backoff(self, mock_sleep):
