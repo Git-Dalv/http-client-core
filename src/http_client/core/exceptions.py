@@ -261,6 +261,44 @@ class DecompressionBombError(FatalError):
         self.url = url
         super().__init__(message)
 
+class CircuitOpenError(FatalError):
+    """
+    Circuit breaker is open - requests temporarily blocked.
+
+    Возникает когда Circuit Breaker находится в состоянии OPEN
+    из-за высокого уровня ошибок. Запросы блокируются до истечения
+    recovery_timeout.
+
+    Args:
+        message: Сообщение об ошибке
+        url: URL запроса (optional)
+        recovery_time: Timestamp когда circuit может закрыться (optional)
+        failure_count: Количество failures которые привели к открытию (optional)
+    """
+
+    def __init__(
+        self,
+        message: str,
+        url: Optional[str] = None,
+        recovery_time: Optional[float] = None,
+        failure_count: Optional[int] = None
+    ):
+        self.url = url
+        self.recovery_time = recovery_time
+        self.failure_count = failure_count
+
+        msg = message
+        if url:
+            msg += f" (url: {url})"
+        if recovery_time:
+            import time
+            wait_seconds = max(0, recovery_time - time.time())
+            msg += f" (retry in {wait_seconds:.1f}s)"
+        if failure_count:
+            msg += f" (failures: {failure_count})"
+
+        super().__init__(msg)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # СПЕЦИАЛЬНЫЕ
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

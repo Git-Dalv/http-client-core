@@ -5,7 +5,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, List, Dict, Set, Union, TYPE_CHECKING
+from typing import Optional, Tuple, List, Dict, Set, Union, Type, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .logging import LoggingConfig
@@ -169,6 +169,54 @@ class SecurityConfig:
             raise ValueError("max_compression_ratio must be positive")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CIRCUIT BREAKER CONFIG
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@dataclass(frozen=True)
+class CircuitBreakerConfig:
+    """
+    Конфигурация Circuit Breaker для защиты от каскадных сбоев.
+
+    Circuit Breaker временно блокирует запросы при высоком уровне ошибок,
+    предотвращая каскадные отказы и давая системе время на восстановление.
+
+    Args:
+        enabled: Включен ли Circuit Breaker (по умолчанию выключен для backward compatibility)
+        failure_threshold: Количество ошибок для открытия circuit
+        recovery_timeout: Время (сек) до попытки восстановления
+        half_open_max_calls: Максимум пробных запросов в HALF_OPEN состоянии
+        exclude_exceptions: Исключения, которые не считаются failures
+
+    States:
+        - CLOSED: нормальная работа
+        - OPEN: слишком много ошибок, запросы блокируются
+        - HALF_OPEN: тестирование восстановления
+
+    Examples:
+        >>> CircuitBreakerConfig(enabled=True, failure_threshold=5)
+        >>> CircuitBreakerConfig(
+        ...     enabled=True,
+        ...     failure_threshold=10,
+        ...     recovery_timeout=60.0,
+        ...     exclude_exceptions=frozenset([TimeoutError])
+        ... )
+    """
+    enabled: bool = False
+    failure_threshold: int = 5
+    recovery_timeout: float = 30.0
+    half_open_max_calls: int = 3
+    exclude_exceptions: frozenset = field(default_factory=frozenset)
+
+    def __post_init__(self):
+        """Валидация."""
+        if self.failure_threshold <= 0:
+            raise ValueError("failure_threshold must be positive")
+        if self.recovery_timeout <= 0:
+            raise ValueError("recovery_timeout must be positive")
+        if self.half_open_max_calls <= 0:
+            raise ValueError("half_open_max_calls must be positive")
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # MAIN CONFIG
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -200,6 +248,7 @@ class HTTPClientConfig:
     retry: RetryConfig = field(default_factory=RetryConfig)
     pool: ConnectionPoolConfig = field(default_factory=ConnectionPoolConfig)
     security: SecurityConfig = field(default_factory=SecurityConfig)
+    circuit_breaker: CircuitBreakerConfig = field(default_factory=CircuitBreakerConfig)
     logging: Optional['LoggingConfig'] = None  # Logging configuration (None = no logging)
 
     def __post_init__(self):
@@ -329,6 +378,7 @@ class HTTPClientConfig:
             retry=self.retry,
             pool=self.pool,
             security=self.security,
+            circuit_breaker=self.circuit_breaker,
             logging=self.logging
         )
 
@@ -355,5 +405,6 @@ class HTTPClientConfig:
             retry=retry_cfg,
             pool=self.pool,
             security=self.security,
+            circuit_breaker=self.circuit_breaker,
             logging=self.logging
         )

@@ -17,6 +17,7 @@ from .core.config import (
     RetryConfig,
     ConnectionPoolConfig,
     SecurityConfig,
+    CircuitBreakerConfig,
 )
 from .core.exceptions import (
     HTTPClientException,
@@ -31,7 +32,9 @@ from .core.exceptions import (
     TooManyRetriesError,
     ResponseTooLargeError,
     DecompressionBombError,
+    CircuitOpenError,
 )
+from .core.circuit_breaker import CircuitBreaker, CircuitState
 from .plugins.plugin import Plugin as BasePlugin
 from .plugins.logging_plugin import LoggingPlugin
 from .plugins.retry_plugin import RetryPlugin
@@ -61,6 +64,11 @@ __all__ = [
     "RetryConfig",
     "ConnectionPoolConfig",
     "SecurityConfig",
+    "CircuitBreakerConfig",
+
+    # Circuit Breaker
+    "CircuitBreaker",
+    "CircuitState",
 
     # Exceptions
     "HTTPClientException",
@@ -75,6 +83,7 @@ __all__ = [
     "TooManyRetriesError",
     "ResponseTooLargeError",
     "DecompressionBombError",
+    "CircuitOpenError",
 
     # Plugins
     "BasePlugin",
