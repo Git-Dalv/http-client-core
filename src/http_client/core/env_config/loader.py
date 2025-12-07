@@ -4,6 +4,7 @@ Configuration loader from environment variables and .env files.
 Main entry point for loading configuration.
 """
 
+import logging
 from typing import Optional
 from pathlib import Path
 
@@ -18,6 +19,9 @@ from ..logging.config import LoggingConfig
 from .validator import HTTPClientSettings
 from .profiles import ProfileType, ProfileConfig, get_env_file_path
 from .secrets import mask_dict_secrets
+
+
+logger = logging.getLogger(__name__)
 
 
 def load_from_env(
@@ -137,14 +141,14 @@ def print_config_summary(config: HTTPClientConfig, mask_secrets: bool = True):
           timeout: connect=5.0s, read=10.0s, total=30.0s
           ...
     """
-    print("HTTPClientConfig:")
-    print(f"  base_url: {config.base_url}")
-    print(f"  timeout: connect={config.timeout.connect}s, read={config.timeout.read}s, total={config.timeout.total}s")
-    print(f"  retry: max_attempts={config.retry.max_attempts}, backoff={config.retry.backoff_factor}")
-    print(f"  security: verify_ssl={config.security.verify_ssl}, max_size={config.security.max_response_size}")
-    print(f"  pool: connections={config.pool.pool_connections}, maxsize={config.pool.pool_maxsize}")
+    logger.info("HTTPClientConfig:")
+    logger.info("  base_url: %s", config.base_url)
+    logger.info("  timeout: connect=%ss, read=%ss, total=%ss", config.timeout.connect, config.timeout.read, config.timeout.total)
+    logger.info("  retry: max_attempts=%s, backoff=%s", config.retry.max_attempts, config.retry.backoff_factor)
+    logger.info("  security: verify_ssl=%s, max_size=%s", config.security.verify_ssl, config.security.max_response_size)
+    logger.info("  pool: connections=%s, maxsize=%s", config.pool.pool_connections, config.pool.pool_maxsize)
 
     if config.logging:
-        print(f"  logging: level={config.logging.level}, format={config.logging.format}")
+        logger.info("  logging: level=%s, format=%s", config.logging.level, config.logging.format)
         if config.logging.enable_file:
-            print(f"    file: {config.logging.file_path}")
+            logger.info("    file: %s", config.logging.file_path)

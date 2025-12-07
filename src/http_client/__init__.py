@@ -1,5 +1,7 @@
 """HTTP Client Library - Production-ready HTTP client with plugins."""
 
+import logging
+
 from .core.http_client import HTTPClient
 
 # Опциональный импорт AsyncHTTPClient (требует httpx)
@@ -37,6 +39,10 @@ from .plugins.monitoring_plugin import MonitoringPlugin
 from .plugins.cache_plugin import CachePlugin
 from .plugins.rate_limit_plugin import RateLimitPlugin
 from .plugins.auth_plugin import AuthPlugin
+
+# Set up logging - add NullHandler to prevent "No handler found" warnings
+# Users can configure logging themselves using logging.getLogger('http_client')
+logging.getLogger('http_client').addHandler(logging.NullHandler())
 
 # Version info
 __version__ = "1.0.0"
