@@ -201,6 +201,67 @@ for i in range(50):
     response = client.get(f"/data/{i}")
 ```
 
+## 🔍 Monitoring & Health Checks
+
+### Health Check
+
+The `health_check()` method provides comprehensive diagnostics for monitoring systems, health endpoints, and debugging:
+
+```python
+from src.http_client import HTTPClient
+
+client = HTTPClient(base_url="https://api.example.com")
+
+# Basic health check (no network request)
+health = client.health_check()
+print(f"Healthy: {health['healthy']}")
+print(f"Active sessions: {health['active_sessions']}")
+print(f"Plugins: {health['plugins']}")
+print(f"Config: {health['config']}")
+
+# Health check with connectivity test
+health = client.health_check(test_url="https://api.example.com/health")
+if health['connectivity']['reachable']:
+    print(f"✅ API reachable in {health['connectivity']['response_time_ms']}ms")
+else:
+    print(f"❌ API unreachable: {health['connectivity']['error']}")
+```
+
+**Use cases:**
+- Kubernetes liveness/readiness probes
+- Prometheus metrics endpoints
+- Pre-deployment connectivity checks
+- Debugging connection issues
+
+### Cache Statistics
+
+Monitor cache performance with built-in metrics:
+
+```python
+from src.http_client import HTTPClient, CachePlugin
+
+# Create cache with size limit
+cache = CachePlugin(ttl=300, max_size=100)
+
+client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(cache)
+
+# Make requests
+client.get("/users")
+client.get("/users")  # Cache hit
+
+# Check statistics
+print(f"Cache size: {cache.size}/{cache.max_size}")
+print(f"Hit rate: {cache.hits / (cache.hits + cache.misses) * 100:.1f}%")
+print(f"Cache hits: {cache.hits}")
+print(f"Cache misses: {cache.misses}")
+```
+
+**Features:**
+- Automatic eviction with LRU strategy
+- Thread-safe hit/miss tracking
+- Configurable max_size to prevent memory leaks
+
 ## 🔧 Configuration
 
 ### Timeout Configuration
