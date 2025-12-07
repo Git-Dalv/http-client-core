@@ -22,7 +22,9 @@ from .exceptions import (
     TooManyRetriesError,
     ResponseTooLargeError,
     DecompressionBombError,
+    CircuitOpenError,
 )
+from .circuit_breaker import CircuitBreaker
 
 # Delayed import to avoid circular dependency
 if TYPE_CHECKING:
@@ -176,6 +178,9 @@ class HTTPClient:
             )
 
         object.__setattr__(self, '_logger', logger_instance)
+
+        # Circuit breaker for fault tolerance
+        object.__setattr__(self, '_circuit_breaker', CircuitBreaker(config.circuit_breaker))
 
         # Thread-safe session manager - each thread gets its own session
         object.__setattr__(
@@ -726,6 +731,17 @@ class HTTPClient:
                 max_retries=self._config.retry.max_attempts - 1
             )
 
+        # Check circuit breaker before starting
+        if not self._circuit_breaker.can_execute():
+            # Circuit is open - block request
+            stats = self._circuit_breaker.get_stats()
+            raise CircuitOpenError(
+                "Circuit breaker is OPEN - too many failures",
+                url=url,
+                recovery_time=stats.get('last_failure_time', 0) + self._config.circuit_breaker.recovery_timeout if stats.get('last_failure_time') else None,
+                failure_count=stats.get('failure_count', 0)
+            )
+
         # Retry loop
         last_error = None
 
@@ -881,6 +897,9 @@ class HTTPClient:
                     # Reset retry counter
                     self._retry_engine.reset()
 
+                    # Record success in circuit breaker
+                    self._circuit_breaker.record_success()
+
                     return response
 
                 except requests.exceptions.RequestException as e:
@@ -931,6 +950,9 @@ class HTTPClient:
                                 correlation_id=correlation_id,
                                 is_max_attempts=is_max_attempts
                             )
+
+                        # Record failure in circuit breaker (final failure, no more retries)
+                        self._circuit_breaker.record_failure(our_error)
 
                         if is_max_attempts:
                             raise TooManyRetriesError(
