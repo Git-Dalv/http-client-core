@@ -5,6 +5,7 @@ import warnings
 import threading
 import weakref
 import atexit
+import logging
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -27,6 +28,9 @@ from .exceptions import (
 if TYPE_CHECKING:
     from .logging import HTTPClientLogger
 
+
+# Module-level logger
+logger = logging.getLogger(__name__)
 
 # Module-level thread-local storage for request context
 _request_context = threading.local()
@@ -617,7 +621,7 @@ class HTTPClient:
                     should_retry = True
             except Exception as plugin_error:
                 # Логируем ошибку плагина, но не прерываем выполнение
-                print(f"Plugin {plugin.__class__.__name__} error in on_error: {plugin_error}")
+                logger.warning("Plugin %s error in on_error: %s", plugin.__class__.__name__, plugin_error)
 
         return should_retry
 
@@ -754,7 +758,7 @@ class HTTPClient:
                                     # Update kwargs with plugin modifications (deep merge for nested dicts like headers)
                                     kwargs = _deep_merge(kwargs, result)
                         except Exception as e:
-                            print(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
+                            logger.warning("Plugin %s error in before_request: %s", plugin.__class__.__name__, e)
 
                     # Filter out internal parameters (starting with '_') before passing to requests
                     # These are used by plugins for internal tracking and should not be passed to requests.Session
@@ -857,7 +861,7 @@ class HTTPClient:
                                 # V1 API - only receives Response
                                 response = plugin.after_response(response=response)
                         except Exception as e:
-                            print(f"Plugin {plugin.__class__.__name__} error in after_response: {e}")
+                            logger.warning("Plugin %s error in after_response: %s", plugin.__class__.__name__, e)
 
                     # Success - Log completion
                     if self._logger:
@@ -905,7 +909,7 @@ class HTTPClient:
                                     response=response
                                 )
                         except Exception as plugin_error:
-                            print(f"Plugin {plugin.__class__.__name__} error in on_error: {plugin_error}")
+                            logger.warning("Plugin %s error in on_error: %s", plugin.__class__.__name__, plugin_error)
 
                     # Check if should retry
                     if not self._retry_engine.should_retry(method, our_error, response):
@@ -960,8 +964,8 @@ class HTTPClient:
                             correlation_id=correlation_id
                         )
                     else:
-                        # Fallback to print if no logger
-                        print(f"[{correlation_id}] Retry {attempt}/{max_attempts - 1} after {wait_time:.1f}s...")
+                        # Fallback to module logger if no instance logger
+                        logger.info("[%s] Retry %d/%d after %.1fs...", correlation_id, attempt, max_attempts - 1, wait_time)
 
                     # Wait
                     time.sleep(wait_time)
@@ -1134,7 +1138,7 @@ class HTTPClient:
                     progress_bar = tqdm(total=total_size, unit='B', unit_scale=True)
                 except ImportError:
                     progress_bar = None
-                    print("Install tqdm for progress bar: pip install tqdm")
+                    logger.info("Install tqdm for progress bar: pip install tqdm")
             else:
                 progress_bar = None
 
