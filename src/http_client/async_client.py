@@ -22,12 +22,19 @@ except ImportError:
 from .core.config import HTTPClientConfig, TimeoutConfig
 from .core.exceptions import (
     HTTPClientException,
+    HTTPError,
     TimeoutError,
     ConnectionError,
     ServerError,
+    BadRequestError,
+    UnauthorizedError,
+    ForbiddenError,
+    NotFoundError,
+    TooManyRequestsError,
     TooManyRetriesError,
     ResponseTooLargeError,
 )
+from .core.retry_engine import RetryEngine
 from .plugins.plugin import Plugin
 
 
@@ -97,6 +104,7 @@ class AsyncHTTPClient:
         self._base_url = self._config.base_url
         self._plugins: List[Plugin] = list(plugins) if plugins else []
         self._proxies = proxies
+        self._retry_engine = RetryEngine(self._config.retry)
 
         # Создаём httpx timeout
         if isinstance(timeout, TimeoutConfig):
@@ -177,6 +185,9 @@ class AsyncHTTPClient:
         """
         client = await self._get_client()
 
+        # Создаём RetryEngine для этого запроса (для thread-safety в async)
+        retry_engine = RetryEngine(self._config.retry)
+
         # Выполняем before_request хуки плагинов
         for plugin in self._plugins:
             try:
@@ -187,9 +198,9 @@ class AsyncHTTPClient:
                 warnings.warn(f"Plugin {plugin.__class__.__name__} error in before_request: {e}")
 
         last_error: Optional[Exception] = None
-        max_attempts = self._config.retry.max_attempts
+        response_for_retry: Optional[httpx.Response] = None
 
-        for attempt in range(max_attempts):
+        while True:
             try:
                 response = await client.request(method, url, **kwargs)
 
@@ -202,12 +213,28 @@ class AsyncHTTPClient:
                         size=int(content_length),
                     )
 
-                # Проверяем статус для retry
-                if response.status_code >= 500 and attempt < max_attempts - 1:
-                    # Server error - retry
-                    wait_time = self._calculate_backoff(attempt)
-                    await asyncio.sleep(wait_time)
-                    continue
+                # Проверяем статус код
+                if response.status_code >= 400:
+                    # Создаём ServerError для проверки retry
+                    if response.status_code >= 500:
+                        error = ServerError(response.status_code, str(response.url))
+                        response_for_retry = response
+
+                        # Проверяем нужен ли retry
+                        if retry_engine.should_retry(method, error, response):
+                            # Retry
+                            await retry_engine.async_wait(error, response)
+                            retry_engine.increment()
+                            continue
+                        else:
+                            # Не ретраим - raise
+                            raise error
+                    else:
+                        # 4xx - не ретраим
+                        response.raise_for_status()
+
+                # Успешный ответ
+                retry_engine.reset()
 
                 # Выполняем after_response хуки
                 for plugin in self._plugins:
@@ -223,8 +250,32 @@ class AsyncHTTPClient:
             except httpx.ConnectError as e:
                 last_error = ConnectionError(str(e), url)
             except httpx.HTTPStatusError as e:
-                last_error = ServerError(e.response.status_code, url)
+                # Конвертируем в наш тип исключения по статус коду
+                status_code = e.response.status_code
+                response_url = str(e.response.url)
+                response_for_retry = e.response
+
+                if status_code == 400:
+                    last_error = BadRequestError(response_url)
+                elif status_code == 401:
+                    last_error = UnauthorizedError(response_url)
+                elif status_code == 403:
+                    last_error = ForbiddenError(response_url)
+                elif status_code == 404:
+                    last_error = NotFoundError(response_url)
+                elif status_code == 429:
+                    retry_after = e.response.headers.get('Retry-After')
+                    last_error = TooManyRequestsError(response_url, retry_after=retry_after)
+                elif 400 <= status_code < 500:
+                    # Другие 4xx ошибки
+                    last_error = HTTPError(status_code, response_url)
+                else:
+                    # 5xx ошибки
+                    last_error = ServerError(status_code, response_url)
             except ResponseTooLargeError:
+                raise
+            except ServerError:
+                # Уже обработано выше, просто пробрасываем
                 raise
             except Exception as e:
                 last_error = HTTPClientException(str(e))
@@ -236,32 +287,24 @@ class AsyncHTTPClient:
                 except Exception:
                     pass
 
-            # Backoff перед retry
-            if attempt < max_attempts - 1:
-                wait_time = self._calculate_backoff(attempt)
-                await asyncio.sleep(wait_time)
+            # Проверяем нужен ли retry
+            if not retry_engine.should_retry(method, last_error, response_for_retry):
+                # Проверяем достигли ли max attempts
+                is_max_attempts = retry_engine.attempt + 1 >= self._config.retry.max_attempts
 
-        raise TooManyRetriesError(
-            max_retries=max_attempts,
-            last_error=last_error,
-            url=url,
-        )
+                if is_max_attempts:
+                    raise TooManyRetriesError(
+                        max_retries=self._config.retry.max_attempts - 1,
+                        last_error=last_error,
+                        url=url,
+                    )
+                else:
+                    # Фатальная ошибка или non-idempotent метод
+                    raise last_error
 
-    def _calculate_backoff(self, attempt: int) -> float:
-        """Вычислить время ожидания для retry."""
-        base = self._config.retry.backoff_base
-        factor = self._config.retry.backoff_factor
-        max_wait = self._config.retry.backoff_max
-
-        wait_time = base * (factor ** attempt)
-
-        # Добавляем jitter если включено
-        if self._config.retry.backoff_jitter:
-            import random
-            jitter = random.uniform(0.5, 1.5)
-            wait_time *= jitter
-
-        return min(wait_time, max_wait)
+            # Ждём и повторяем
+            await retry_engine.async_wait(last_error, response_for_retry)
+            retry_engine.increment()
 
     # ==================== Удобные методы ====================
 
