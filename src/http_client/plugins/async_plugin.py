@@ -14,6 +14,8 @@ try:
 except ImportError:
     httpx = None
 
+from .plugin import PluginPriority
+
 
 class AsyncPlugin(ABC):
     """
@@ -22,8 +24,14 @@ class AsyncPlugin(ABC):
     Async плагины выполняют операции асинхронно, не блокируя event loop.
     Используются в AsyncHTTPClient.
 
+    Attributes:
+        priority: Приоритет выполнения плагина (меньше = раньше).
+                 По умолчанию NORMAL (50). Используйте PluginPriority константы.
+
     Example:
         >>> class MyAsyncPlugin(AsyncPlugin):
+        ...     priority = PluginPriority.HIGH  # Выполнится рано
+        ...
         ...     async def before_request(self, method, url, **kwargs):
         ...         await asyncio.sleep(0.1)  # async операция
         ...         return kwargs
@@ -34,6 +42,9 @@ class AsyncPlugin(ABC):
         ...     async def on_error(self, error, **kwargs):
         ...         pass
     """
+
+    # Class attribute для приоритета (можно переопределить в подклассах)
+    priority: int = PluginPriority.NORMAL
 
     async def before_request(
         self,

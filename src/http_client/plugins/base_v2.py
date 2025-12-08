@@ -5,6 +5,7 @@ from typing import Optional
 import requests
 
 from ..core.context import RequestContext
+from .plugin import PluginPriority
 
 
 class PluginV2(ABC):
@@ -17,8 +18,14 @@ class PluginV2(ABC):
     - after_response has access to request parameters via context
     - Explicit request_id for tracing
 
+    Attributes:
+        priority: Приоритет выполнения плагина (меньше = раньше).
+                 По умолчанию NORMAL (50). Используйте PluginPriority константы.
+
     Example:
         class MyPlugin(PluginV2):
+            priority = PluginPriority.HIGH  # Выполнится рано
+
             def before_request(self, ctx: RequestContext) -> Optional[requests.Response]:
                 # Access all request info
                 print(f"Request {ctx.request_id}: {ctx.method} {ctx.url}")
@@ -36,6 +43,9 @@ class PluginV2(ABC):
                 print(f"Response for {ctx.method} {ctx.url}: {response.status_code}")
                 return response
     """
+
+    # Class attribute для приоритета (можно переопределить в подклассах)
+    priority: int = PluginPriority.NORMAL
 
     def before_request(self, ctx: RequestContext) -> Optional[requests.Response]:
         """Called before making HTTP request.

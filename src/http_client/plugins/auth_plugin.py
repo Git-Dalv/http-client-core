@@ -4,11 +4,17 @@ from typing import Any, Dict, Optional
 
 import requests
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginPriority
 
 
 class AuthPlugin(Plugin):
-    """Плагин для различных типов аутентификации"""
+    """
+    Плагин для различных типов аутентификации.
+
+    Priority: FIRST (0) - должен выполняться до кэширования и других операций.
+    """
+
+    priority = PluginPriority.FIRST
 
     def __init__(
         self,

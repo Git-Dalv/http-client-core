@@ -14,13 +14,15 @@ except ImportError:
         "Install with: pip install http-client-core[cache]"
     )
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginPriority
 from ..utils.serialization import serialize_response, deserialize_response
 
 
 class DiskCachePlugin(Plugin):
     """
     Плагин для кэширования HTTP ответов на диске.
+
+    Priority: CACHE (10) - должен быть рано, но после Auth плагинов.
 
     Features:
         - Персистентное хранение кэша между запусками приложения
@@ -47,6 +49,8 @@ class DiskCachePlugin(Plugin):
         >>> # Второй запрос - берется из кэша
         >>> response2 = client.get("/data")
     """
+
+    priority = PluginPriority.CACHE
 
     def __init__(
         self,

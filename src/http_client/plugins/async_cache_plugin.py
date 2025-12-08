@@ -18,6 +18,7 @@ except ImportError:
     httpx = None
 
 from .async_plugin import AsyncPlugin
+from .plugin import PluginPriority
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,8 @@ class AsyncCachePlugin(AsyncPlugin):
     """
     Async плагин для кэширования HTTP ответов.
 
+    Priority: CACHE (10) - должен быть рано, но после Auth плагинов.
+
     Использует async lock для thread-safety в async контексте.
     Кэширует только GET запросы с успешными ответами (200-299).
 
@@ -45,6 +48,8 @@ class AsyncCachePlugin(AsyncPlugin):
         >>> # Второй запрос - hit (из кэша)
         >>> response = await client.get("https://api.example.com/data")
     """
+
+    priority = PluginPriority.CACHE
 
     def __init__(
         self,

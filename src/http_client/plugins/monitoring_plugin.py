@@ -5,7 +5,7 @@ import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginPriority
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 class MonitoringPlugin(Plugin):
     """
     Плагин для мониторинга и сбора метрик HTTP запросов.
+
+    Priority: LAST (100) - должен выполняться последним для точных метрик.
 
     Отслеживает:
     - Общее количество запросов
@@ -41,6 +43,8 @@ class MonitoringPlugin(Plugin):
         >>> # Печатаем сводку
         >>> monitoring.print_summary()
     """
+
+    priority = PluginPriority.LAST
 
     def __init__(self, history_size: int = 100, track_errors: bool = True):
         """
