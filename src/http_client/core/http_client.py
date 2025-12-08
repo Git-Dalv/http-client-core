@@ -157,7 +157,11 @@ class HTTPClient:
         object.__setattr__(self, '_config', config)
         object.__setattr__(self, '_retry_engine', RetryEngine(config.retry))
         object.__setattr__(self, '_error_handler', ErrorHandler())
-        object.__setattr__(self, '_plugins', list(plugins) if plugins else [])
+
+        # Initialize plugins and sort by priority (lower = earlier execution)
+        plugin_list = list(plugins) if plugins else []
+        plugin_list.sort(key=lambda p: getattr(p, 'priority', 50))  # Default priority = 50 (NORMAL)
+        object.__setattr__(self, '_plugins', plugin_list)
 
         # Initialize logger if logging config provided
         logger_instance: Optional['HTTPClientLogger'] = None
@@ -423,12 +427,18 @@ class HTTPClient:
 
     def add_plugin(self, plugin: Plugin):
         """
-        Добавляет плагин к клиенту.
+        Добавляет плагин к клиенту и сортирует плагины по приоритету.
+
+        Плагины выполняются в порядке приоритета (меньше = раньше).
+        По умолчанию плагины без явного приоритета получают NORMAL (50).
 
         Args:
             plugin: Экземпляр плагина
         """
         self._plugins.append(plugin)
+        # Sort plugins by priority (lower = earlier execution)
+        # Stable sort preserves order for equal priorities
+        self._plugins.sort(key=lambda p: getattr(p, 'priority', 50))
 
     def remove_plugin(self, plugin: Plugin):
         """
@@ -443,6 +453,25 @@ class HTTPClient:
     def clear_plugins(self):
         """Удаляет все плагины"""
         self._plugins.clear()
+
+    def get_plugins_order(self) -> List[tuple]:
+        """
+        Возвращает список плагинов в порядке выполнения для отладки.
+
+        Полезно для проверки правильности порядка выполнения плагинов.
+
+        Returns:
+            List[tuple]: Список кортежей (имя_плагина, приоритет)
+
+        Example:
+            >>> client = HTTPClient()
+            >>> client.add_plugin(AuthPlugin())
+            >>> client.add_plugin(CachePlugin())
+            >>> client.add_plugin(LoggingPlugin())
+            >>> print(client.get_plugins_order())
+            [('AuthPlugin', 0), ('CachePlugin', 10), ('LoggingPlugin', 100)]
+        """
+        return [(p.__class__.__name__, getattr(p, 'priority', 50)) for p in self._plugins]
 
     # ==================== Управление куками ====================
 

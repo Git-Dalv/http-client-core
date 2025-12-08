@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional, List, Set
 
 import requests
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginPriority
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,13 @@ DEFAULT_CACHE_HEADERS = {
 
 
 class CachePlugin(Plugin):
-    """Плагин для кэширования HTTP ответов"""
+    """
+    Плагин для кэширования HTTP ответов.
+
+    Priority: CACHE (10) - должен быть рано, но после Auth плагинов.
+    """
+
+    priority = PluginPriority.CACHE
 
     def __init__(
             self,

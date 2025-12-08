@@ -12,6 +12,7 @@ from collections import deque
 from typing import Any, Dict
 
 from .async_plugin import AsyncPlugin
+from .plugin import PluginPriority
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 class AsyncRateLimitPlugin(AsyncPlugin):
     """
     Async плагин для ограничения частоты запросов.
+
+    Priority: HIGH (25) - должен выполняться рано, чтобы защитить API от перегрузки.
 
     Использует sliding window алгоритм для точного контроля rate limit.
     Не блокирует event loop при ожидании.
@@ -32,6 +35,8 @@ class AsyncRateLimitPlugin(AsyncPlugin):
         >>> for i in range(15):
         ...     response = await client.get("https://api.example.com/data")
     """
+
+    priority = PluginPriority.HIGH
 
     def __init__(self, max_requests: int = 10, time_window: int = 60):
         """

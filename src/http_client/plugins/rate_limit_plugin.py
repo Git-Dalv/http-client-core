@@ -8,13 +8,19 @@ from typing import Any, Dict
 
 import requests
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginPriority
 
 logger = logging.getLogger(__name__)
 
 
 class RateLimitPlugin(Plugin):
-    """Плагин для ограничения частоты запросов"""
+    """
+    Плагин для ограничения частоты запросов.
+
+    Priority: HIGH (25) - должен выполняться рано, чтобы защитить API от перегрузки.
+    """
+
+    priority = PluginPriority.HIGH
 
     def __init__(self, max_requests: int = 10, time_window: int = 60):
         """

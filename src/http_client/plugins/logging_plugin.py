@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 import requests
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginPriority
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -13,13 +13,17 @@ logger = logging.getLogger(__name__)
 
 class LoggingPlugin(Plugin):
     """
-    Плагин для логирования HTTP запросов и ответов
+    Плагин для логирования HTTP запросов и ответов.
+
+    Priority: LAST (100) - должен выполняться последним для полного логирования.
 
     .. deprecated:: 1.0.0
         LoggingPlugin is deprecated and will be removed in v2.0.0.
         Use HTTPClientConfig.logging instead.
         See: https://github.com/your-repo/http-client-core#logging
     """
+
+    priority = PluginPriority.LAST
 
     def __init__(self):
         """Initialize the logging plugin with deprecation warning."""

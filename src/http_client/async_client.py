@@ -103,7 +103,12 @@ class AsyncHTTPClient:
             )
 
         self._base_url = self._config.base_url
-        self._plugins: List[Plugin] = list(plugins) if plugins else []
+
+        # Initialize plugins and sort by priority (lower = earlier execution)
+        plugin_list = list(plugins) if plugins else []
+        plugin_list.sort(key=lambda p: getattr(p, 'priority', 50))  # Default priority = 50 (NORMAL)
+        self._plugins: List[Plugin] = plugin_list
+
         self._proxies = proxies
         self._retry_engine = RetryEngine(self._config.retry)
 
@@ -369,13 +374,43 @@ class AsyncHTTPClient:
     # ==================== Плагины ====================
 
     def add_plugin(self, plugin: Plugin) -> None:
-        """Добавить плагин."""
+        """
+        Добавляет плагин к клиенту и сортирует плагины по приоритету.
+
+        Плагины выполняются в порядке приоритета (меньше = раньше).
+        По умолчанию плагины без явного приоритета получают NORMAL (50).
+
+        Args:
+            plugin: Экземпляр плагина (Plugin или AsyncPlugin)
+        """
         self._plugins.append(plugin)
+        # Sort plugins by priority (lower = earlier execution)
+        # Stable sort preserves order for equal priorities
+        self._plugins.sort(key=lambda p: getattr(p, 'priority', 50))
 
     def remove_plugin(self, plugin: Plugin) -> None:
         """Удалить плагин."""
         if plugin in self._plugins:
             self._plugins.remove(plugin)
+
+    def get_plugins_order(self) -> List[tuple]:
+        """
+        Возвращает список плагинов в порядке выполнения для отладки.
+
+        Полезно для проверки правильности порядка выполнения плагинов.
+
+        Returns:
+            List[tuple]: Список кортежей (имя_плагина, приоритет)
+
+        Example:
+            >>> client = AsyncHTTPClient()
+            >>> client.add_plugin(AsyncCachePlugin())
+            >>> client.add_plugin(AsyncRateLimitPlugin())
+            >>> client.add_plugin(AsyncMonitoringPlugin())
+            >>> print(client.get_plugins_order())
+            [('AsyncCachePlugin', 10), ('AsyncRateLimitPlugin', 25), ('AsyncMonitoringPlugin', 100)]
+        """
+        return [(p.__class__.__name__, getattr(p, 'priority', 50)) for p in self._plugins]
 
     # ==================== Health Check ====================
 

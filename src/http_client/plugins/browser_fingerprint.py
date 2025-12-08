@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 import requests
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginPriority
 
 
 class BrowserProfile:
@@ -149,7 +149,11 @@ class BrowserFingerprintPlugin(Plugin):
 
     Автоматически добавляет консистентные HTTP заголовки, имитирующие
     реальный браузер для обхода простой защиты от ботов.
+
+    Priority: FIRST (0) - должен выполняться первым для правильных заголовков.
     """
+
+    priority = PluginPriority.FIRST
 
     def __init__(self, browser: str = "chrome", random_profile: bool = False):
         """

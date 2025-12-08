@@ -11,6 +11,7 @@ import time
 from typing import Any, Dict, List
 
 from .async_plugin import AsyncPlugin
+from .plugin import PluginPriority
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 class AsyncMonitoringPlugin(AsyncPlugin):
     """
     Async плагин для мониторинга HTTP запросов.
+
+    Priority: LAST (100) - должен выполняться последним для точных метрик.
 
     Отслеживает:
     - Общее количество запросов
@@ -38,6 +41,8 @@ class AsyncMonitoringPlugin(AsyncPlugin):
         >>> metrics = await monitoring.get_metrics()
         >>> print(f"Total requests: {metrics['total_requests']}")
     """
+
+    priority = PluginPriority.LAST
 
     def __init__(self, history_size: int = 100):
         """

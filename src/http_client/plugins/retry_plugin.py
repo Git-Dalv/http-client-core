@@ -6,13 +6,19 @@ from typing import Any, Dict
 
 import requests
 
-from .plugin import Plugin
+from .plugin import Plugin, PluginPriority
 
 logger = logging.getLogger(__name__)
 
 
 class RetryPlugin(Plugin):
-    """Плагин для автоматических повторных попыток при ошибках"""
+    """
+    Плагин для автоматических повторных попыток при ошибках.
+
+    Priority: NORMAL (50) - стандартный приоритет.
+    """
+
+    priority = PluginPriority.NORMAL
 
     def __init__(self, max_retries: int = 3, backoff_factor: float = 0.5):
         self.max_retries = max_retries
