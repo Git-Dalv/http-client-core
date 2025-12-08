@@ -11,6 +11,12 @@ from .retry_plugin import RetryPlugin
 from .base_v2 import PluginV2
 from .disk_cache_v2 import DiskCachePluginV2
 
+# Async plugins
+from .async_plugin import AsyncPlugin, SyncPluginAdapter
+from .async_cache_plugin import AsyncCachePlugin
+from .async_rate_limit_plugin import AsyncRateLimitPlugin
+from .async_monitoring_plugin import AsyncMonitoringPlugin
+
 __all__ = [
     # V1 API (legacy)
     "Plugin",
@@ -25,4 +31,10 @@ __all__ = [
     # V2 API (recommended)
     "PluginV2",
     "DiskCachePluginV2",
+    # Async plugins
+    "AsyncPlugin",
+    "SyncPluginAdapter",
+    "AsyncCachePlugin",
+    "AsyncRateLimitPlugin",
+    "AsyncMonitoringPlugin",
 ]
