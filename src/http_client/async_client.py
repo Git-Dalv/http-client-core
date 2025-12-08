@@ -36,6 +36,7 @@ from .core.exceptions import (
 )
 from .core.retry_engine import RetryEngine
 from .plugins.plugin import Plugin
+from .plugins.async_plugin import AsyncPlugin
 
 
 class AsyncHTTPClient:
@@ -191,7 +192,18 @@ class AsyncHTTPClient:
         # Выполняем before_request хуки плагинов
         for plugin in self._plugins:
             try:
-                result = plugin.before_request(method, url, **kwargs)
+                # Проверяем тип плагина
+                if isinstance(plugin, AsyncPlugin):
+                    # Async плагин - вызываем напрямую
+                    result = await plugin.before_request(method, url, **kwargs)
+                else:
+                    # Sync плагин - выполняем в executor чтобы не блокировать event loop
+                    loop = asyncio.get_event_loop()
+                    result = await loop.run_in_executor(
+                        None,
+                        lambda: plugin.before_request(method, url, **kwargs)
+                    )
+
                 if isinstance(result, dict):
                     kwargs.update(result)
             except Exception as e:
@@ -239,7 +251,16 @@ class AsyncHTTPClient:
                 # Выполняем after_response хуки
                 for plugin in self._plugins:
                     try:
-                        response = plugin.after_response(response)
+                        if isinstance(plugin, AsyncPlugin):
+                            # Async плагин
+                            response = await plugin.after_response(response)
+                        else:
+                            # Sync плагин - выполняем в executor
+                            loop = asyncio.get_event_loop()
+                            response = await loop.run_in_executor(
+                                None,
+                                lambda: plugin.after_response(response)
+                            )
                     except Exception as e:
                         warnings.warn(f"Plugin {plugin.__class__.__name__} error in after_response: {e}")
 
@@ -283,7 +304,16 @@ class AsyncHTTPClient:
             # Выполняем on_error хуки
             for plugin in self._plugins:
                 try:
-                    plugin.on_error(last_error, method=method, url=url)
+                    if isinstance(plugin, AsyncPlugin):
+                        # Async плагин
+                        await plugin.on_error(last_error, method=method, url=url)
+                    else:
+                        # Sync плагин - выполняем в executor
+                        loop = asyncio.get_event_loop()
+                        await loop.run_in_executor(
+                            None,
+                            lambda: plugin.on_error(last_error, method=method, url=url)
+                        )
                 except Exception:
                     pass
 
