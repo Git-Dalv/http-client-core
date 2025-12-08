@@ -2,6 +2,7 @@
 
 import pytest
 import time
+import asyncio
 from unittest.mock import Mock
 from src.http_client.core.retry_engine import RetryEngine
 from src.http_client.core.config import RetryConfig
@@ -261,3 +262,115 @@ def test_parse_retry_after_invalid_format():
 
     wait = engine._parse_retry_after(response)
     assert wait is None
+
+
+# ==================== Async Tests ====================
+
+@pytest.mark.asyncio
+async def test_async_wait_basic():
+    """Тест async_wait() с базовым exponential backoff."""
+    config = RetryConfig(
+        backoff_base=0.1,
+        backoff_factor=2.0,
+        backoff_jitter=False
+    )
+    engine = RetryEngine(config)
+
+    # Первая попытка: wait = 0.1
+    start = time.time()
+    await engine.async_wait()
+    elapsed = time.time() - start
+
+    # Проверяем что ждали ~0.1 секунды (±0.05 для погрешности)
+    assert 0.05 <= elapsed <= 0.15
+
+
+@pytest.mark.asyncio
+async def test_async_wait_with_increment():
+    """Тест async_wait() с increment для exponential backoff."""
+    config = RetryConfig(
+        backoff_base=0.1,
+        backoff_factor=2.0,
+        backoff_jitter=False
+    )
+    engine = RetryEngine(config)
+
+    # Попытка 0: 0.1 * 2^0 = 0.1
+    start = time.time()
+    await engine.async_wait()
+    elapsed1 = time.time() - start
+    assert 0.05 <= elapsed1 <= 0.15
+
+    # Increment
+    engine.increment()
+
+    # Попытка 1: 0.1 * 2^1 = 0.2
+    start = time.time()
+    await engine.async_wait()
+    elapsed2 = time.time() - start
+    assert 0.15 <= elapsed2 <= 0.25
+
+
+@pytest.mark.asyncio
+async def test_async_wait_with_retry_after():
+    """Тест async_wait() с Retry-After header."""
+    config = RetryConfig(
+        backoff_base=10.0,
+        respect_retry_after=True
+    )
+    engine = RetryEngine(config)
+
+    # Mock response с Retry-After
+    response = Mock()
+    response.headers = {'Retry-After': '0.1'}
+
+    # Должен использовать 0.1 из header, а не backoff
+    start = time.time()
+    await engine.async_wait(response=response)
+    elapsed = time.time() - start
+
+    assert 0.05 <= elapsed <= 0.15
+
+
+@pytest.mark.asyncio
+async def test_async_wait_respects_max():
+    """Тест async_wait() ограничивает максимум."""
+    config = RetryConfig(
+        backoff_base=10.0,
+        backoff_factor=10.0,
+        backoff_max=0.2,
+        backoff_jitter=False
+    )
+    engine = RetryEngine(config)
+    engine._attempt = 5  # Большая попытка
+
+    # Ожидание должно быть ограничено 0.2 секунды
+    start = time.time()
+    await engine.async_wait()
+    elapsed = time.time() - start
+
+    assert 0.15 <= elapsed <= 0.25
+
+
+@pytest.mark.asyncio
+async def test_async_wait_concurrent():
+    """Тест что несколько async_wait() могут работать параллельно."""
+    config = RetryConfig(
+        backoff_base=0.1,
+        backoff_jitter=False
+    )
+
+    # Создаём разные engines для разных запросов
+    engine1 = RetryEngine(config)
+    engine2 = RetryEngine(config)
+
+    # Запускаем параллельно
+    start = time.time()
+    await asyncio.gather(
+        engine1.async_wait(),
+        engine2.async_wait(),
+    )
+    elapsed = time.time() - start
+
+    # Должны выполниться параллельно (~0.1), а не последовательно (~0.2)
+    assert 0.05 <= elapsed <= 0.15

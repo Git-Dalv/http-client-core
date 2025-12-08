@@ -9,6 +9,7 @@ Retry engine для умных повторных попыток.
 
 import time
 import random
+import asyncio
 from typing import Optional
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -113,6 +114,24 @@ class RetryEngine:
             wait = wait * jitter
 
         return wait
+
+    async def async_wait(
+        self,
+        error: Exception = None,
+        response = None
+    ) -> None:
+        """
+        Асинхронное ожидание перед retry (async-версия).
+
+        Args:
+            error: Исключение (опционально)
+            response: Response (опционально)
+
+        Examples:
+            >>> await engine.async_wait(error, response)
+        """
+        wait_time = self.get_wait_time(error, response)
+        await asyncio.sleep(wait_time)
 
     def _parse_retry_after(self, response) -> Optional[float]:
         """
