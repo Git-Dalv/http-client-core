@@ -1,6 +1,7 @@
 """HTTP Client Library - Production-ready HTTP client with plugins."""
 
 import logging
+from importlib.metadata import version, PackageNotFoundError
 
 from .core.http_client import HTTPClient
 from .core.env_config.hot_reload import ReloadableHTTPClient
@@ -48,8 +49,13 @@ from .plugins.auth_plugin import AuthPlugin
 # Users can configure logging themselves using logging.getLogger('http_client')
 logging.getLogger('http_client').addHandler(logging.NullHandler())
 
-# Version info
-__version__ = "1.5.0"
+# Version info - read from package metadata (single source of truth in pyproject.toml)
+try:
+    __version__ = version("http-client-core")
+except PackageNotFoundError:
+    # Package is not installed (development mode)
+    __version__ = "0.0.0-dev"
+
 __deprecation_version__ = "2.0.0"  # Version when deprecated APIs will be removed
 __migration_guide_url__ = "https://github.com/Git-Dalv/http-client-core/blob/main/docs/migration/v1-to-v2.md"
 __author__ = "HTTP Client Contributors"

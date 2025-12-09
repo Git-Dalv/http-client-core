@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "http-client-core"
-version = "1.0.0"
+version = "1.5.0"
 description = "Production-ready HTTP client library with powerful plugin system, retry logic, and comprehensive error handling"
 readme = "README.md"
 requires-python = ">=3.9"
