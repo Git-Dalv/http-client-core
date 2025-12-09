@@ -139,3 +139,77 @@ def test_http_client_config_immutable():
     config = HTTPClientConfig()
     with pytest.raises(Exception):
         config.base_url = "https://new.com"
+
+def test_http_client_config_headers_immutable():
+    """Тест что headers нельзя мутировать после создания."""
+    config = HTTPClientConfig(headers={"X-Test": "value"})
+
+    # Проверяем что это Mapping
+    from typing import Mapping
+    assert isinstance(config.headers, Mapping)
+
+    # Попытка изменить должна вызвать TypeError
+    with pytest.raises(TypeError):
+        config.headers["X-New"] = "fail"
+
+def test_http_client_config_proxies_immutable():
+    """Тест что proxies нельзя мутировать после создания."""
+    config = HTTPClientConfig(proxies={"http": "http://proxy:8080"})
+
+    # Проверяем что это Mapping
+    from typing import Mapping
+    assert isinstance(config.proxies, Mapping)
+
+    # Попытка изменить должна вызвать TypeError
+    with pytest.raises(TypeError):
+        config.proxies["https"] = "https://proxy:8080"
+
+def test_http_client_config_create_accepts_dict():
+    """Тест что create() принимает обычный dict."""
+    headers_dict = {"Authorization": "Bearer token"}
+    proxies_dict = {"http": "http://proxy:8080"}
+
+    config = HTTPClientConfig.create(
+        headers=headers_dict,
+        proxies=proxies_dict
+    )
+
+    # Проверяем что headers и proxies заморожены
+    with pytest.raises(TypeError):
+        config.headers["X-New"] = "fail"
+
+    with pytest.raises(TypeError):
+        config.proxies["https"] = "https://proxy:8080"
+
+    # Проверяем что оригинальные dict не были изменены
+    assert headers_dict == {"Authorization": "Bearer token"}
+    assert proxies_dict == {"http": "http://proxy:8080"}
+
+def test_http_client_config_with_headers():
+    """Тест метода with_headers() возвращает новый immutable config."""
+    config = HTTPClientConfig(headers={"X-Original": "value"})
+    new_config = config.with_headers({"X-New": "new_value"})
+
+    # Проверяем что оригинальный конфиг не изменился
+    assert "X-New" not in config.headers
+    assert config.headers["X-Original"] == "value"
+
+    # Проверяем что новый конфиг содержит оба заголовка
+    assert new_config.headers["X-Original"] == "value"
+    assert new_config.headers["X-New"] == "new_value"
+
+    # Проверяем что новый конфиг тоже immutable
+    with pytest.raises(TypeError):
+        new_config.headers["X-Another"] = "fail"
+
+def test_http_client_config_headers_dict_not_mutated():
+    """Тест что оригинальный dict не мутируется."""
+    headers_dict = {"X-Test": "value"}
+    config = HTTPClientConfig(headers=headers_dict)
+
+    # Изменяем оригинальный dict
+    headers_dict["X-New"] = "new_value"
+
+    # Проверяем что config.headers не изменился
+    assert "X-New" not in config.headers
+    assert dict(config.headers) == {"X-Test": "value"}
