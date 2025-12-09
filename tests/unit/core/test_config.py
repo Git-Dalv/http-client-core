@@ -213,3 +213,54 @@ def test_http_client_config_headers_dict_not_mutated():
     # Проверяем что config.headers не изменился
     assert "X-New" not in config.headers
     assert dict(config.headers) == {"X-Test": "value"}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# SecurityConfig
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def test_security_config_insecure_warning_raised():
+    """Тест что InsecureRequestWarning выдается при verify_ssl=False."""
+    import warnings
+    from src.http_client.core.exceptions import InsecureRequestWarning
+
+    with warnings.catch_warnings(record=True) as w:
+        # Enable all warnings
+        warnings.simplefilter("always")
+
+        # Create config with SSL verification disabled
+        config = SecurityConfig(verify_ssl=False)
+
+        # Check that warning was raised
+        assert len(w) == 1
+        assert issubclass(w[0].category, InsecureRequestWarning)
+        assert "SSL verification is disabled" in str(w[0].message)
+        assert "man-in-the-middle" in str(w[0].message)
+
+def test_security_config_no_warning_when_ssl_enabled():
+    """Тест что warning НЕ выдается при verify_ssl=True (по умолчанию)."""
+    import warnings
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+
+        # Create config with SSL verification enabled (default)
+        config = SecurityConfig(verify_ssl=True)
+
+        # Check that no warnings were raised
+        assert len(w) == 0
+
+def test_security_config_insecure_warning_in_http_client_config():
+    """Тест что InsecureRequestWarning выдается через HTTPClientConfig.create()."""
+    import warnings
+    from src.http_client.core.exceptions import InsecureRequestWarning
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+
+        # Create config with SSL verification disabled
+        config = HTTPClientConfig.create(verify_ssl=False)
+
+        # Check that warning was raised
+        assert len(w) == 1
+        assert issubclass(w[0].category, InsecureRequestWarning)
+        assert "SSL verification is disabled" in str(w[0].message)
