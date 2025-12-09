@@ -3,6 +3,7 @@
 import logging
 
 from .core.http_client import HTTPClient
+from .core.env_config.hot_reload import ReloadableHTTPClient
 
 # Опциональный импорт AsyncHTTPClient (требует httpx)
 try:
@@ -57,6 +58,7 @@ __all__ = [
     # Core
     "HTTPClient",
     "AsyncHTTPClient",
+    "ReloadableHTTPClient",
 
     # Config
     "HTTPClientConfig",

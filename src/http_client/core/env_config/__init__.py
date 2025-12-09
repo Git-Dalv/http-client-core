@@ -21,6 +21,7 @@ Example:
 
 from .loader import load_from_env, print_config_summary
 from .file_loader import ConfigFileLoader, ConfigValidationError
+from .hot_reload import ConfigWatcher, ReloadableHTTPClient
 from .validator import (
     HTTPClientSettings,
     TimeoutSettings,
@@ -39,6 +40,9 @@ __all__ = [
     # File loader
     "ConfigFileLoader",
     "ConfigValidationError",
+    # Hot reload
+    "ConfigWatcher",
+    "ReloadableHTTPClient",
     # Validators
     "HTTPClientSettings",
     "TimeoutSettings",

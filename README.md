@@ -160,6 +160,145 @@ config = ConfigFileLoader.from_env_path()
 client = HTTPClient(config=config)
 ```
 
+## 🔄 Hot Reload Configuration
+
+For long-running processes (workers, scrapers, API clients), automatically reload configuration when the config file changes without restarting the application:
+
+### Automatic Hot Reload
+
+```python
+from http_client import ReloadableHTTPClient
+
+# Client automatically reloads config every 10 seconds
+client = ReloadableHTTPClient("config.yaml", check_interval=10.0)
+
+# Always uses the latest configuration
+response = client.get("/api/data")
+
+# Config file is modified externally...
+# Next request automatically uses updated config
+response = client.get("/api/data")
+
+# Don't forget to close when done
+client.close()
+```
+
+### Context Manager Support
+
+```python
+from http_client import ReloadableHTTPClient
+import time
+
+# Automatically stops watcher on exit
+with ReloadableHTTPClient("config.yaml", check_interval=5.0) as client:
+    while running:
+        response = client.get("/health")
+        time.sleep(60)
+```
+
+### Manual Control with ConfigWatcher
+
+For more control over the reload process:
+
+```python
+from http_client import HTTPClient
+from http_client.core.env_config import ConfigWatcher
+
+def on_config_reload(new_config):
+    """Called when config is successfully reloaded."""
+    print(f"Config reloaded! New timeout: {new_config.timeout}")
+    # Alert monitoring system, update metrics, etc.
+
+def on_reload_error(error):
+    """Called when config reload fails."""
+    print(f"Config reload failed: {error}")
+    # Alert ops team, log to monitoring, etc.
+
+# Create watcher with callbacks
+watcher = ConfigWatcher(
+    "config.yaml",
+    check_interval=5.0,
+    on_reload=on_config_reload,
+    on_error=on_reload_error
+)
+
+# Start monitoring in background thread
+watcher.start()
+
+# Create client with current config
+client = HTTPClient(config=watcher.current_config)
+
+# ... application logic ...
+
+# Later, recreate client with updated config
+client = HTTPClient(config=watcher.current_config)
+
+# Or force immediate reload
+if watcher.reload_now():
+    print("Config reloaded successfully")
+    client = HTTPClient(config=watcher.current_config)
+
+# Stop monitoring when done
+watcher.stop()
+```
+
+### Real-World Example: Long-Running Worker
+
+```python
+from http_client import ReloadableHTTPClient
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+def process_queue():
+    """Worker that processes queue items with hot-reloadable config."""
+    # Config reloads automatically every 30 seconds
+    with ReloadableHTTPClient("config.yaml", check_interval=30.0) as client:
+        logger.info("Worker started with hot reload enabled")
+
+        while True:
+            try:
+                # Get work item
+                item = queue.get()
+
+                # Process with current config (auto-updates!)
+                response = client.post("/api/process", json=item)
+
+                if response.status_code == 200:
+                    logger.info(f"Processed item {item['id']}")
+                else:
+                    logger.error(f"Failed to process item {item['id']}")
+
+            except KeyboardInterrupt:
+                logger.info("Worker shutting down")
+                break
+            except Exception as e:
+                logger.error(f"Error processing item: {e}")
+                time.sleep(5)  # Back off on errors
+
+# Watcher automatically stops when exiting context manager
+```
+
+**What gets updated automatically:**
+- Timeouts (connect, read, total)
+- Retry settings (attempts, backoff, jitter)
+- Headers and authentication
+- Logging level and format
+- Circuit breaker parameters
+
+**What requires client recreation (handled automatically):**
+- Base URL changes
+- Connection pool settings
+- SSL verification settings
+
+**Features:**
+- ✅ Thread-safe configuration access
+- ✅ Graceful error handling (keeps old config on parse errors)
+- ✅ Callbacks for reload success and errors
+- ✅ Works with YAML and JSON configs
+- ✅ No external dependencies (uses stdlib only)
+
 ## 🎯 Basic Examples
 
 ### With Automatic Retry
