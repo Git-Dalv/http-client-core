@@ -16,6 +16,40 @@ class RetryPlugin(Plugin):
     Плагин для автоматических повторных попыток при ошибках.
 
     Priority: NORMAL (50) - стандартный приоритет.
+
+    .. deprecated:: 1.0.0
+        RetryPlugin is deprecated and will be removed in v2.0.0.
+        Use HTTPClientConfig.retry instead for built-in retry functionality.
+
+    Warning:
+        This plugin conflicts with the built-in retry mechanism
+        (HTTPClientConfig.retry). If both are enabled, they will both
+        execute, causing duplicate retries and unpredictable behavior.
+
+        HTTPClient will issue a DeprecationWarning when this plugin
+        is added if config.retry.max_attempts > 1.
+
+    Migration:
+        Instead of::
+
+            from http_client.plugins import RetryPlugin
+            client = HTTPClient(base_url="...")
+            client.add_plugin(RetryPlugin(max_retries=3, backoff_factor=0.5))
+
+        Use::
+
+            from http_client.core.config import HTTPClientConfig, RetryConfig
+            config = HTTPClientConfig.create(
+                base_url="...",
+                retry=RetryConfig(
+                    max_attempts=3,
+                    backoff_base=0.5
+                )
+            )
+            client = HTTPClient(config=config)
+
+    See Also:
+        Migration guide: https://github.com/Git-Dalv/http-client-core/blob/main/docs/migration/v1-to-v2.md
     """
 
     priority = PluginPriority.NORMAL

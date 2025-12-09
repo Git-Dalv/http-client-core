@@ -435,7 +435,29 @@ class HTTPClient:
 
         Args:
             plugin: Экземпляр плагина
+
+        Warnings:
+            Issues DeprecationWarning if RetryPlugin is added when built-in
+            retry is enabled (config.retry.max_attempts > 1), as this causes
+            conflicting retry behavior.
+
+        Note:
+            RetryPlugin is deprecated. Use HTTPClientConfig.retry instead.
+            See migration guide: https://github.com/Git-Dalv/http-client-core/blob/main/docs/migration/v1-to-v2.md
         """
+        # Check for RetryPlugin vs built-in retry conflict
+        from ..plugins.retry_plugin import RetryPlugin
+        if isinstance(plugin, RetryPlugin) and self._config.retry.max_attempts > 1:
+            import warnings
+            warnings.warn(
+                "RetryPlugin is deprecated and conflicts with built-in retry mechanism. "
+                "Both will execute, causing duplicate retries and unpredictable behavior. "
+                "Consider using HTTPClientConfig.retry instead. "
+                "Migration guide: https://github.com/Git-Dalv/http-client-core/blob/main/docs/migration/v1-to-v2.md",
+                DeprecationWarning,
+                stacklevel=2
+            )
+
         self._plugins.append(plugin)
         # Sort plugins by priority (lower = earlier execution)
         # Stable sort preserves order for equal priorities

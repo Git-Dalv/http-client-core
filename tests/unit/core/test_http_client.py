@@ -5,6 +5,7 @@ Comprehensive tests for HTTPClient - complete coverage.
 import pytest
 import responses
 
+from src.http_client.core.config import HTTPClientConfig
 from src.http_client.core.exceptions import HTTPClientException, NotFoundError
 from src.http_client.core.http_client import HTTPClient
 from src.http_client.plugins.logging_plugin import LoggingPlugin
@@ -288,6 +289,65 @@ class TestHTTPClientPlugins:
         response = client.get("/test")
 
         assert response.status_code == 200
+        client.close()
+
+    def test_retry_plugin_conflict_warning(self, base_url):
+        """Test that adding RetryPlugin with built-in retry enabled issues warning.
+
+        Validates that HTTPClient detects the conflict between deprecated
+        RetryPlugin and the built-in retry mechanism, warning users about
+        duplicate retry behavior.
+        """
+        from src.http_client.plugins.retry_plugin import RetryPlugin
+
+        # Create client with built-in retry enabled (max_retries > 1)
+        config = HTTPClientConfig.create(
+            base_url=base_url,
+            max_retries=3  # Built-in retry enabled
+        )
+        client = HTTPClient(config=config)
+
+        # Adding RetryPlugin should issue DeprecationWarning
+        with pytest.warns(DeprecationWarning, match="RetryPlugin is deprecated and conflicts"):
+            plugin = RetryPlugin(max_retries=3)
+            client.add_plugin(plugin)
+
+        # Plugin should still be added (for backward compatibility)
+        assert plugin in client._plugins
+        client.close()
+
+    def test_retry_plugin_no_warning_when_builtin_disabled(self, base_url):
+        """Test that no warning is issued when built-in retry is disabled.
+
+        When config.retry.max_attempts = 1 (retry disabled), adding RetryPlugin
+        should not issue a conflict warning since only one retry mechanism is active.
+        """
+        from src.http_client.plugins.retry_plugin import RetryPlugin
+
+        # Create client with built-in retry disabled
+        # max_retries=0 means max_attempts=1 (no retries, just original request)
+        config = HTTPClientConfig.create(
+            base_url=base_url,
+            max_retries=0  # Built-in retry disabled: max_attempts = 0 + 1 = 1
+        )
+        client = HTTPClient(config=config)
+
+        # Adding RetryPlugin should NOT issue DeprecationWarning about conflict
+        # (though the plugin itself is deprecated, we're specifically testing conflict detection)
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            plugin = RetryPlugin(max_retries=3)
+            client.add_plugin(plugin)
+
+            # Check if any warnings contain "conflicts"
+            conflict_warnings = [warning for warning in w
+                               if "conflicts" in str(warning.message)]
+            assert len(conflict_warnings) == 0, \
+                "Should not warn about conflict when built-in retry is disabled"
+
+        # Plugin should still be added
+        assert plugin in client._plugins
         client.close()
 
 
