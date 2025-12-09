@@ -113,7 +113,8 @@ class AsyncCachePlugin(AsyncPlugin):
 
         # Сериализуем и хэшируем
         cache_str = json.dumps(cache_data, sort_keys=True)
-        return hashlib.sha256(cache_str.encode()).hexdigest()
+        # Use SHA256 (truncate to 32 chars for consistency with cache_plugin.py)
+        return hashlib.sha256(cache_str.encode()).hexdigest()[:32]
 
     async def _get_from_cache(self, cache_key: str) -> Optional[Any]:
         """Получить значение из кэша (async)."""
