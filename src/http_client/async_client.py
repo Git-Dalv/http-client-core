@@ -33,8 +33,10 @@ from .core.exceptions import (
     TooManyRequestsError,
     TooManyRetriesError,
     ResponseTooLargeError,
+    CircuitOpenError,
 )
 from .core.retry_engine import RetryEngine
+from .core.circuit_breaker import AsyncCircuitBreaker
 from .plugins.plugin import Plugin
 from .plugins.async_plugin import AsyncPlugin
 
@@ -112,6 +114,9 @@ class AsyncHTTPClient:
         self._proxies = proxies
         self._retry_engine = RetryEngine(self._config.retry)
 
+        # Circuit breaker for fault tolerance
+        self._circuit_breaker = AsyncCircuitBreaker(self._config.circuit_breaker)
+
         # Создаём httpx timeout
         if isinstance(timeout, TimeoutConfig):
             self._timeout = httpx.Timeout(
@@ -185,10 +190,22 @@ class AsyncHTTPClient:
             httpx.Response объект
 
         Raises:
+            CircuitOpenError: Circuit breaker is OPEN - too many failures
             TooManyRetriesError: Превышено количество попыток
             TimeoutError: Таймаут запроса
             ConnectionError: Ошибка соединения
         """
+        # Check circuit breaker before starting
+        if not await self._circuit_breaker.can_execute():
+            # Circuit is open - block request
+            stats = await self._circuit_breaker.get_stats()
+            raise CircuitOpenError(
+                "Circuit breaker is OPEN - too many failures",
+                url=url,
+                recovery_time=stats.get('last_failure_time', 0) + self._config.circuit_breaker.recovery_timeout if stats.get('last_failure_time') else None,
+                failure_count=stats.get('failure_count', 0)
+            )
+
         client = await self._get_client()
 
         # Создаём RetryEngine для этого запроса (для thread-safety в async)
@@ -252,6 +269,9 @@ class AsyncHTTPClient:
 
                 # Успешный ответ
                 retry_engine.reset()
+
+                # Record success in circuit breaker
+                await self._circuit_breaker.record_success()
 
                 # Выполняем after_response хуки
                 for plugin in self._plugins:
@@ -324,6 +344,9 @@ class AsyncHTTPClient:
 
             # Проверяем нужен ли retry
             if not retry_engine.should_retry(method, last_error, response_for_retry):
+                # Record failure in circuit breaker (final failure, no more retries)
+                await self._circuit_breaker.record_failure(last_error)
+
                 # Проверяем достигли ли max attempts
                 is_max_attempts = retry_engine.attempt + 1 >= self._config.retry.max_attempts
 
