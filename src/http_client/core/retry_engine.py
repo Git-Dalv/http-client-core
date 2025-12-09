@@ -7,6 +7,7 @@ Retry engine для умных повторных попыток.
 - Идемпотентность проверка
 """
 
+import logging
 import time
 import random
 import asyncio
@@ -16,6 +17,8 @@ from email.utils import parsedate_to_datetime
 
 from .config import RetryConfig
 from .exceptions import FatalError, TemporaryError
+
+logger = logging.getLogger(__name__)
 
 
 class RetryEngine:
@@ -135,13 +138,18 @@ class RetryEngine:
 
     def _parse_retry_after(self, response) -> Optional[float]:
         """
-        Распарсить Retry-After header.
+        Распарсить Retry-After header с валидацией против malicious input.
 
         Args:
             response: Response объект
 
         Returns:
             Секунды или None
+
+        Security:
+            - Ограничивает длину header для защиты от DoS
+            - Безопасно обрабатывает malformed input
+            - Логирует подозрительные значения
         """
         if not hasattr(response, 'headers'):
             return None
@@ -150,16 +158,43 @@ class RetryEngine:
         if not retry_after:
             return None
 
+        # Защита от oversized header (DoS attack)
+        # Нормальные значения: "60" или "Wed, 21 Oct 2015 07:28:00 GMT"
+        MAX_HEADER_LENGTH = 100
+        if len(retry_after) > MAX_HEADER_LENGTH:
+            logger.warning(
+                f"Retry-After header too long ({len(retry_after)} chars), ignoring. "
+                f"Value: {retry_after[:50]}..."
+            )
+            return None
+
         try:
             # Попытка как число секунд
-            return float(retry_after)
+            seconds = float(retry_after)
+            # Валидация разумного диапазона
+            if seconds < 0 or seconds > 86400 * 365:  # Не больше года
+                logger.warning(
+                    f"Retry-After seconds value out of reasonable range: {seconds}"
+                )
+                return None
+            return seconds
         except ValueError:
             # Попытка как HTTP-date
             try:
                 retry_date = parsedate_to_datetime(retry_after)
                 delta = (retry_date - datetime.now(timezone.utc)).total_seconds()
                 return max(0, delta)
-            except Exception:
+            except (ValueError, TypeError, OverflowError) as e:
+                # Более строгая обработка ошибок parsedate_to_datetime
+                logger.debug(
+                    f"Failed to parse Retry-After header '{retry_after}': {e}"
+                )
+                return None
+            except Exception as e:
+                # Catch-all для неожиданных ошибок
+                logger.warning(
+                    f"Unexpected error parsing Retry-After header '{retry_after}': {e}"
+                )
                 return None
 
     def increment(self):
