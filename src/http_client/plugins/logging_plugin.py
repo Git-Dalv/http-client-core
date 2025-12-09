@@ -6,6 +6,7 @@ from typing import Any, Dict
 import requests
 
 from .plugin import Plugin, PluginPriority
+from ..core.utils import sanitize_url
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,7 +40,8 @@ class LoggingPlugin(Plugin):
         super().__init__()
 
     def before_request(self, method: str, url: str, **kwargs: Any) -> Dict[str, Any]:
-        logger.info(f"Sending {method} request to {url}")
+        safe_url = sanitize_url(url)
+        logger.info(f"Sending {method} request to {safe_url}")
         if kwargs.get("json"):
             logger.debug(f"Request body: {kwargs['json']}")
         if kwargs.get("params"):
@@ -47,7 +49,8 @@ class LoggingPlugin(Plugin):
         return kwargs
 
     def after_response(self, response: requests.Response) -> requests.Response:
-        logger.info(f"Received response: {response.status_code} from {response.url}")
+        safe_url = sanitize_url(str(response.url))
+        logger.info(f"Received response: {response.status_code} from {safe_url}")
         logger.debug(f"Response body: {response.text[:200]}...")  # First 200 chars
         return response
 

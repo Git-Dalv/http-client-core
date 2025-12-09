@@ -25,6 +25,7 @@ from .exceptions import (
     CircuitOpenError,
 )
 from .circuit_breaker import CircuitBreaker
+from .utils import sanitize_url
 
 # Delayed import to avoid circular dependency
 if TYPE_CHECKING:
@@ -760,7 +761,7 @@ class HTTPClient:
             self._logger.debug(
                 "Request initialized",
                 method=method,
-                url=url,
+                url=sanitize_url(url, self._config.security.sensitive_url_params),
                 correlation_id=correlation_id,
                 has_json="json" in kwargs,
                 has_data="data" in kwargs
@@ -777,7 +778,7 @@ class HTTPClient:
             self._logger.info(
                 "Request started",
                 method=method,
-                url=url,
+                url=sanitize_url(url, self._config.security.sensitive_url_params),
                 correlation_id=correlation_id,
                 timeout=self._config.timeout.total or self._config.timeout.read,
                 max_retries=self._config.retry.max_attempts - 1
@@ -938,7 +939,7 @@ class HTTPClient:
                         self._logger.info(
                             "Request completed",
                             method=method,
-                            url=url,
+                            url=sanitize_url(url, self._config.security.sensitive_url_params),
                             status_code=response.status_code,
                             duration_ms=duration_ms,
                             attempt=attempt,
@@ -993,7 +994,7 @@ class HTTPClient:
                             self._logger.error(
                                 "Request failed",
                                 method=method,
-                                url=url,
+                                url=sanitize_url(url, self._config.security.sensitive_url_params),
                                 error=str(our_error),
                                 error_type=type(our_error).__name__,
                                 attempt=self._retry_engine.attempt + 1,
@@ -1028,7 +1029,7 @@ class HTTPClient:
                         self._logger.warning(
                             "Request error (will retry)",
                             method=method,
-                            url=url,
+                            url=sanitize_url(url, self._config.security.sensitive_url_params),
                             error=str(our_error),
                             error_type=type(our_error).__name__,
                             attempt=attempt,
