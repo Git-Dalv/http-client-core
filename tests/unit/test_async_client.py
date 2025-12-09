@@ -8,6 +8,7 @@ import pytest
 httpx = pytest.importorskip("httpx")
 
 from src.http_client.async_client import AsyncHTTPClient
+from src.http_client.core.config import HTTPClientConfig, SecurityConfig
 
 
 class TestAsyncHTTPClientInit:
@@ -238,3 +239,125 @@ class TestAsyncHTTPClientDownload:
 
             assert isinstance(bytes_downloaded, int)
             assert bytes_downloaded == 512
+
+
+class TestAsyncHTTPClientCircuitBreaker:
+    """Test circuit breaker functionality."""
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_initialization(self):
+        """Test that circuit breaker is initialized."""
+        from src.http_client.core.config import CircuitBreakerConfig
+
+        config = HTTPClientConfig.create()
+        async with AsyncHTTPClient(config=config) as client:
+            assert client._circuit_breaker is not None
+            state = await client._circuit_breaker.get_state()
+            from src.http_client.core.circuit_breaker import CircuitState
+            assert state == CircuitState.CLOSED
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_opens_after_failures(self):
+        """Test that circuit breaker opens after reaching failure threshold."""
+        from src.http_client.core.config import CircuitBreakerConfig
+        from src.http_client.core.exceptions import CircuitOpenError, ServerError
+
+        # Configure circuit breaker with low threshold
+        cb_config = CircuitBreakerConfig(
+            enabled=True,
+            failure_threshold=3,  # Open after 3 failures
+            recovery_timeout=60.0
+        )
+        config = HTTPClientConfig.create()
+        config = HTTPClientConfig(
+            base_url=config.base_url,
+            headers=config.headers,
+            proxies=config.proxies,
+            timeout=config.timeout,
+            retry=config.retry,
+            pool=config.pool,
+            security=config.security,
+            circuit_breaker=cb_config,
+            logging=config.logging
+        )
+
+        async with AsyncHTTPClient(config=config) as client:
+            # Make 3 failing requests to open the circuit
+            for _ in range(3):
+                try:
+                    # Use a URL that will fail
+                    await client.get("https://httpbin.org/status/500")
+                except ServerError:
+                    pass  # Expected
+
+            # Circuit should now be open
+            from src.http_client.core.circuit_breaker import CircuitState
+            state = await client._circuit_breaker.get_state()
+            assert state == CircuitState.OPEN
+
+            # Next request should fail with CircuitOpenError
+            with pytest.raises(CircuitOpenError) as exc_info:
+                await client.get("https://httpbin.org/get")
+
+            assert "Circuit breaker is OPEN" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_records_success(self):
+        """Test that circuit breaker records successful requests."""
+        from src.http_client.core.config import CircuitBreakerConfig
+
+        cb_config = CircuitBreakerConfig(enabled=True, failure_threshold=5)
+        config = HTTPClientConfig.create()
+        config = HTTPClientConfig(
+            base_url=config.base_url,
+            headers=config.headers,
+            proxies=config.proxies,
+            timeout=config.timeout,
+            retry=config.retry,
+            pool=config.pool,
+            security=config.security,
+            circuit_breaker=cb_config,
+            logging=config.logging
+        )
+
+        async with AsyncHTTPClient(config=config) as client:
+            # Successful request
+            response = await client.get("https://httpbin.org/get")
+            assert response.status_code == 200
+
+            # Circuit should remain closed
+            from src.http_client.core.circuit_breaker import CircuitState
+            state = await client._circuit_breaker.get_state()
+            assert state == CircuitState.CLOSED
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_disabled(self):
+        """Test that circuit breaker can be disabled."""
+        from src.http_client.core.config import CircuitBreakerConfig
+
+        cb_config = CircuitBreakerConfig(enabled=False)
+        config = HTTPClientConfig.create()
+        config = HTTPClientConfig(
+            base_url=config.base_url,
+            headers=config.headers,
+            proxies=config.proxies,
+            timeout=config.timeout,
+            retry=config.retry,
+            pool=config.pool,
+            security=config.security,
+            circuit_breaker=cb_config,
+            logging=config.logging
+        )
+
+        async with AsyncHTTPClient(config=config) as client:
+            # Even with many failures, circuit should stay closed
+            for _ in range(10):
+                try:
+                    await client.get("https://httpbin.org/status/500")
+                except:
+                    pass
+
+            # Circuit should remain closed (disabled)
+            from src.http_client.core.circuit_breaker import CircuitState
+            state = await client._circuit_breaker.get_state()
+            assert state == CircuitState.CLOSED
