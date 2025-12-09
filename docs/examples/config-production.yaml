@@ -1,0 +1,41 @@
+# Production HTTPClient configuration
+# Optimized for production deployments with resilience features
+
+http_client:
+  base_url: "https://api.production.example.com"
+
+  headers:
+    User-Agent: "MyApp/2.0.0"
+    Accept: "application/json"
+
+  timeout:
+    connect: 3
+    read: 45
+    total: 60
+
+  retry:
+    max_attempts: 5
+    backoff_factor: 2.0
+    backoff_max: 120.0
+    backoff_jitter: true
+
+  pool:
+    connections: 20
+    maxsize: 50
+
+  security:
+    verify_ssl: true
+    max_response_size: 52428800  # 50MB
+
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 10
+    recovery_timeout: 60.0
+
+  logging:
+    level: "INFO"
+    format: "json"
+    enable_console: false
+    enable_file: true
+    file_path: "/var/log/myapp/http-client.log"
+    enable_correlation_id: true

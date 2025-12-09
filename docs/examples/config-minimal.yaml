@@ -1,0 +1,11 @@
+# Minimal HTTPClient configuration
+# Only specify what you need - the rest will use defaults
+
+http_client:
+  base_url: "https://api.example.com"
+
+  headers:
+    Authorization: "Bearer YOUR_TOKEN_HERE"
+
+  timeout:
+    read: 60  # Longer timeout for slow APIs

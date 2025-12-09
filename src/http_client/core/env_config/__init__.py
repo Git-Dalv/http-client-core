@@ -20,6 +20,7 @@ Example:
 """
 
 from .loader import load_from_env, print_config_summary
+from .file_loader import ConfigFileLoader, ConfigValidationError
 from .validator import (
     HTTPClientSettings,
     TimeoutSettings,
@@ -35,6 +36,9 @@ __all__ = [
     # Main loader
     "load_from_env",
     "print_config_summary",
+    # File loader
+    "ConfigFileLoader",
+    "ConfigValidationError",
     # Validators
     "HTTPClientSettings",
     "TimeoutSettings",

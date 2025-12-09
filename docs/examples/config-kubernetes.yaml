@@ -1,0 +1,58 @@
+# Kubernetes-optimized HTTPClient configuration
+# Designed for deployment as ConfigMap
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: http-client-config
+  namespace: default
+data:
+  config.yaml: |
+    http_client:
+      base_url: "https://api-service.default.svc.cluster.local"
+
+      timeout:
+        connect: 5
+        read: 30
+        total: 60
+
+      retry:
+        max_attempts: 3
+        backoff_factor: 2.0
+        retry_on_status: [500, 502, 503, 504]
+
+      pool:
+        connections: 15
+        maxsize: 30
+
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 5
+        recovery_timeout: 30.0
+
+      logging:
+        level: "INFO"
+        format: "json"
+        enable_console: true
+        enable_correlation_id: true
+
+---
+# Pod that uses the ConfigMap
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp
+spec:
+  containers:
+  - name: app
+    image: myapp:latest
+    env:
+    - name: HTTP_CLIENT_CONFIG_FILE
+      value: "/etc/http-client/config.yaml"
+    volumeMounts:
+    - name: config
+      mountPath: /etc/http-client
+  volumes:
+  - name: config
+    configMap:
+      name: http-client-config
