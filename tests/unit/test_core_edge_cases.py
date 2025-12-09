@@ -117,14 +117,53 @@ def test_context_manager_with_error():
         pass
 
 
+@responses.activate
 def test_http_methods():
     """Тест всех HTTP методов"""
-    responses.add(responses.POST, "https://httpbin.org/post", json={}, status=200)
+    # Mock all HTTP methods endpoints
+    responses.add(
+        responses.GET,
+        "https://httpbin.org/get",
+        json={"args": {}, "headers": {}, "origin": "127.0.0.1", "url": "https://httpbin.org/get"},
+        status=200
+    )
+    responses.add(
+        responses.POST,
+        "https://httpbin.org/post",
+        json={"args": {}, "data": '{"key": "value"}', "json": {"key": "value"}, "url": "https://httpbin.org/post"},
+        status=200
+    )
+    responses.add(
+        responses.PUT,
+        "https://httpbin.org/put",
+        json={"args": {}, "data": '{"key": "value"}', "json": {"key": "value"}, "url": "https://httpbin.org/put"},
+        status=200
+    )
+    responses.add(
+        responses.DELETE,
+        "https://httpbin.org/delete",
+        json={"args": {}, "data": "", "url": "https://httpbin.org/delete"},
+        status=200
+    )
+    responses.add(
+        responses.PATCH,
+        "https://httpbin.org/patch",
+        json={"args": {}, "data": '{"key": "value"}', "json": {"key": "value"}, "url": "https://httpbin.org/patch"},
+        status=200
+    )
+    responses.add(
+        responses.HEAD,
+        "https://httpbin.org/get",
+        status=200
+    )
+    responses.add(
+        responses.OPTIONS,
+        "https://httpbin.org/get",
+        status=200
+    )
 
     client = HTTPClient(base_url="https://httpbin.org")
-    response = client.post("/post", json={"key": "value"})
 
-    assert response.status_code == 200
     # GET
     response = client.get("/get")
     assert response.status_code == 200
