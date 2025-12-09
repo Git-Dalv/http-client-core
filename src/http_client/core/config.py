@@ -5,7 +5,8 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, List, Dict, Set, Union, Type, TYPE_CHECKING
+from typing import Optional, Tuple, List, Dict, Set, Union, Type, TYPE_CHECKING, Mapping
+from types import MappingProxyType
 
 if TYPE_CHECKING:
     from .logging import LoggingConfig
@@ -220,6 +221,24 @@ class CircuitBreakerConfig:
 # MAIN CONFIG
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def _freeze_dict(d: Optional[Dict[str, str]]) -> Mapping[str, str]:
+    """
+    Convert dict to immutable MappingProxyType.
+
+    Args:
+        d: Dictionary to freeze (can be None)
+
+    Returns:
+        Immutable MappingProxyType
+
+    Example:
+        >>> frozen = _freeze_dict({"X-API-Key": "secret"})
+        >>> frozen["X-New"] = "value"  # Raises TypeError
+    """
+    if d is None:
+        return MappingProxyType({})
+    return MappingProxyType(dict(d))
+
 @dataclass(frozen=True)
 class HTTPClientConfig:
     """
@@ -241,8 +260,8 @@ class HTTPClientConfig:
         >>> config = HTTPClientConfig.create(timeout=60, max_retries=5)
     """
     base_url: Optional[str] = None
-    headers: Dict[str, str] = field(default_factory=dict)
-    proxies: Dict[str, str] = field(default_factory=dict)
+    headers: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+    proxies: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
 
     timeout: TimeoutConfig = field(default_factory=TimeoutConfig)
     retry: RetryConfig = field(default_factory=RetryConfig)
@@ -252,7 +271,14 @@ class HTTPClientConfig:
     logging: Optional['LoggingConfig'] = None  # Logging configuration (None = no logging)
 
     def __post_init__(self):
-        """Normalize base_url by removing trailing slashes."""
+        """Normalize base_url and freeze mutable dicts."""
+        # Freeze mutable dicts to ensure immutability
+        if isinstance(self.headers, dict):
+            object.__setattr__(self, 'headers', MappingProxyType(dict(self.headers)))
+        if isinstance(self.proxies, dict):
+            object.__setattr__(self, 'proxies', MappingProxyType(dict(self.proxies)))
+
+        # Normalize base_url by removing trailing slashes
         if self.base_url:
             # Remove trailing slashes
             normalized = self.base_url.rstrip('/')
@@ -403,6 +429,35 @@ class HTTPClientConfig:
             proxies=self.proxies,
             timeout=self.timeout,
             retry=retry_cfg,
+            pool=self.pool,
+            security=self.security,
+            circuit_breaker=self.circuit_breaker,
+            logging=self.logging
+        )
+
+    def with_headers(self, headers: Dict[str, str]) -> 'HTTPClientConfig':
+        """
+        Создать новый конфиг с дополнительными заголовками.
+
+        Args:
+            headers: Заголовки для объединения с существующими
+
+        Returns:
+            Новый HTTPClientConfig
+
+        Example:
+            >>> new_config = config.with_headers({"X-API-Key": "secret"})
+        """
+        # Merge existing and new headers
+        merged = dict(self.headers)  # Convert MappingProxyType to dict
+        merged.update(headers)
+
+        return HTTPClientConfig(
+            base_url=self.base_url,
+            headers=merged,  # __post_init__ will freeze it
+            proxies=self.proxies,
+            timeout=self.timeout,
+            retry=self.retry,
             pool=self.pool,
             security=self.security,
             circuit_breaker=self.circuit_breaker,
