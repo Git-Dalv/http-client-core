@@ -25,8 +25,11 @@ Production-ready HTTP client library with powerful plugin system, intelligent re
 ```bash
 pip install http-client-core
 
-# With progress bar support for downloads
-pip install http-client-core[progress]
+# With optional dependencies
+pip install http-client-core[progress]    # Progress bars for downloads
+pip install http-client-core[async]       # Async client (httpx)
+pip install http-client-core[cache]       # Disk caching
+pip install http-client-core[otel]        # OpenTelemetry tracing & metrics
 
 # With all optional dependencies
 pip install http-client-core[all]
@@ -261,6 +264,137 @@ print(f"Cache misses: {cache.misses}")
 - Automatic eviction with LRU strategy
 - Thread-safe hit/miss tracking
 - Configurable max_size to prevent memory leaks
+
+## 📡 OpenTelemetry Integration
+
+Add distributed tracing and metrics using OpenTelemetry (industry standard for observability):
+
+### Installation
+
+```bash
+pip install http-client-core[otel]
+```
+
+### Distributed Tracing
+
+Track HTTP requests across your distributed system with OpenTelemetry tracing:
+
+```python
+from http_client import HTTPClient
+from http_client.contrib.opentelemetry import OpenTelemetryPlugin
+
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
+
+# Setup OpenTelemetry tracer
+provider = TracerProvider()
+provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+trace.set_tracer_provider(provider)
+
+# Add OpenTelemetry plugin
+client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(OpenTelemetryPlugin())
+
+# All requests are now traced automatically
+response = client.get("/users")
+```
+
+**Features:**
+- Automatic span creation for each HTTP request
+- W3C Trace Context propagation in headers
+- Follows OpenTelemetry Semantic Conventions
+- Captures request/response metadata
+- Records exceptions and errors
+- Filters sensitive headers (Authorization, Cookie, etc.)
+
+### Metrics Collection
+
+Collect HTTP client metrics using OpenTelemetry:
+
+```python
+from http_client import HTTPClient
+from http_client.contrib.opentelemetry import OpenTelemetryMetrics
+
+from opentelemetry import metrics
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import (
+    ConsoleMetricExporter,
+    PeriodicExportingMetricReader,
+)
+
+# Setup OpenTelemetry metrics
+reader = PeriodicExportingMetricReader(ConsoleMetricExporter())
+provider = MeterProvider(metric_readers=[reader])
+metrics.set_meter_provider(provider)
+
+# Add metrics plugin
+client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(OpenTelemetryMetrics())
+
+# Metrics collected automatically:
+# - http_client_requests_total (counter)
+# - http_client_request_duration_seconds (histogram)
+# - http_client_active_requests (gauge)
+response = client.get("/users")
+```
+
+### Integration with Jaeger
+
+Export traces to Jaeger for visualization:
+
+```python
+from http_client import HTTPClient
+from http_client.contrib.opentelemetry import OpenTelemetryPlugin
+
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+
+# Setup Jaeger exporter
+jaeger_exporter = JaegerExporter(
+    agent_host_name="localhost",
+    agent_port=6831,
+)
+
+provider = TracerProvider()
+provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
+trace.set_tracer_provider(provider)
+
+# Use plugin
+client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(OpenTelemetryPlugin())
+
+# Traces exported to Jaeger automatically
+response = client.get("/users")
+```
+
+### Advanced Configuration
+
+Customize OpenTelemetry behavior:
+
+```python
+from http_client.contrib.opentelemetry import OpenTelemetryPlugin
+
+plugin = OpenTelemetryPlugin(
+    tracer_name="my_service",
+    record_request_body=True,   # Include request body in spans
+    record_response_body=True,  # Include response body in spans
+    excluded_urls=["health", "metrics"],  # Don't trace these URLs
+    capture_headers=True,        # Capture HTTP headers (sensitive ones filtered)
+    max_header_length=256,       # Truncate long header values
+)
+
+client.add_plugin(plugin)
+```
+
+**Use Cases:**
+- Distributed tracing in microservices
+- Performance monitoring and bottleneck identification
+- Error tracking and debugging
+- SLO/SLA monitoring
+- Integration with Jaeger, Zipkin, Prometheus, Grafana
 
 ## 🔧 Configuration
 
