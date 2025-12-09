@@ -7,70 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.1] - 2024-12-07
-
 ### Added
-- **HTTPClient.health_check()** method for monitoring and diagnostics
-  - Returns comprehensive diagnostic information (base_url, active sessions, plugins, config)
-  - Optional connectivity test with response time measurement
-  - Suitable for Kubernetes probes, Prometheus endpoints, and debugging
-  - Example: `health = client.health_check(test_url="https://api.example.com/health")`
+- Migration guide for v1.x to v2.0 transition
+- Migration checker tool: `python -m http_client.tools.migration_check`
+- Hot reload configuration support for long-running processes
+- `ReloadableHTTPClient` for automatic config reloading
+- `ConfigWatcher` for monitoring config file changes
+- YAML/JSON configuration file loading support
+- Example configuration files in `docs/examples/`
 
-- **CachePlugin.max_size** parameter for limiting cache entries (default: 1000)
-  - Prevents unbounded cache growth in long-running applications
-  - Automatic eviction using LRU (Least Recently Used) strategy
-  - Removes 10% of oldest entries when limit is reached (amortized eviction)
-
-- **CachePlugin statistics properties** for monitoring cache performance
-  - `cache.size` - Current number of cached entries (thread-safe)
-  - `cache.hits` - Number of cache hits
-  - `cache.misses` - Number of cache misses
-  - `cache.max_size` - Maximum cache size limit
+### Deprecated
+- `LoggingPlugin` - use `HTTPClientConfig.logging` instead
+- Constructor parameters in favor of structured config objects:
+  - `max_retries` → `config.retry.max_attempts`
+  - `pool_connections` → `config.pool.pool_connections`
+  - `pool_maxsize` → `config.pool.pool_maxsize`
+  - `max_redirects` → `config.pool.max_redirects`
+  - `verify_ssl` → `config.security.verify_ssl`
+  - `pool_block` → `config.pool.pool_block`
 
 ### Changed
-- **RetryPlugin** now uses `logging` module instead of `print()` statements
-  - `logger.info()` for retry messages
-  - `logger.error()` for max retries exhausted messages
-  - Production-ready logging with configurable log levels
+- Improved deprecation warnings with migration guide links
+- Enhanced documentation with migration examples
 
-- **CachePlugin** now automatically manages memory with LRU eviction
-  - Old entries are automatically removed when `max_size` is reached
-  - Thread-safe eviction (called within lock)
-  - No breaking changes - existing code works without modification
+## [1.0.0] - 2024-XX-XX
 
-### Fixed
-- Memory leak in `CachePlugin` when cache grows indefinitely
-  - Cache now respects `max_size` limit and evicts old entries
-  - Prevents out-of-memory errors in long-running applications
-
-### Performance
-- Improved cache efficiency with LRU eviction strategy
-- Thread-safe hit/miss tracking with minimal overhead
-- Health checks use HEAD requests for minimal network impact
-
-### Tests
-- Added 19 comprehensive tests for `HTTPClient.health_check()`
-- Added 19 comprehensive tests for `CachePlugin` max_size and statistics
-- Updated RetryPlugin tests to verify logger usage
-- All tests passing (597 unit tests, 80.60% coverage)
-
-### Documentation
-- Updated README.md with health check examples
-- Updated README.md with cache statistics examples
-- Added use cases for monitoring and observability
-
-## [1.0.0] - 2024-12-06
-
-### Initial Release
+### Added
 - Production-ready HTTP client with plugin system
-- Smart retry logic with exponential backoff
-- Type-safe configuration with immutable config objects
-- 10+ built-in plugins
-- Comprehensive error handling
-- 415 tests with 85% coverage
+- Intelligent retry logic with exponential backoff
+- Thread-safe session management
+- Circuit breaker pattern for fault tolerance
+- Connection pooling
+- OpenTelemetry integration for tracing and metrics
+- Comprehensive plugin ecosystem:
+  - LoggingPlugin
+  - MonitoringPlugin
+  - CachePlugin
+  - RateLimitPlugin
+  - AuthPlugin
+  - BrowserFingerprintPlugin
+- Type-safe immutable configuration
+- Response size limits and decompression bomb protection
+- Health check endpoint
 
----
+### Security
+- SSL verification enabled by default
+- Response size limits to prevent memory exhaustion
+- Decompression bomb protection
+- Secret masking in logs
 
-[Unreleased]: https://github.com/Git-Dalv/http-client-core/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/Git-Dalv/http-client-core/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/Git-Dalv/http-client-core/releases/tag/v1.0.0
+## Deprecation Timeline
+
+- **v1.5.0** (Current): Deprecation warnings added
+- **v1.9.0** (Future): Warnings become errors in strict mode
+- **v2.0.0** (Future): Deprecated APIs removed
+
+## Migration Resources
+
+- **Migration Guide**: [docs/migration/v1-to-v2.md](docs/migration/v1-to-v2.md)
+- **Migration Checker**: `python -m http_client.tools.migration_check`
+- **Strict Mode**: `HTTP_CLIENT_STRICT_DEPRECATION=1`
+
+## Links
+
+- **Repository**: https://github.com/Git-Dalv/http-client-core
+- **Documentation**: https://github.com/Git-Dalv/http-client-core/tree/main/docs
+- **Issues**: https://github.com/Git-Dalv/http-client-core/issues

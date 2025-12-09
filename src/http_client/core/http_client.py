@@ -144,7 +144,8 @@ class HTTPClient:
             if param in kwargs:
                 warnings.warn(
                     f"Parameter '{param}' is deprecated. Use '{replacement}' instead. "
-                    f"This parameter will be removed in version 2.0.0",
+                    f"This parameter will be removed in version 2.0.0. "
+                    f"Migration guide: https://github.com/Git-Dalv/http-client-core/blob/main/docs/migration/v1-to-v2.md",
                     DeprecationWarning,
                     stacklevel=2
                 )
