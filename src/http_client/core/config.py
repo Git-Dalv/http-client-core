@@ -148,17 +148,20 @@ class SecurityConfig:
         max_compression_ratio: Максимально допустимое соотношение сжатия (защита от decompression bomb)
         verify_ssl: Проверять SSL сертификаты
         allow_redirects: Разрешать редиректы
+        sensitive_url_params: Дополнительные sensitive параметры для маскирования в логах
 
     Examples:
         >>> SecurityConfig(max_response_size=50*1024*1024)  # 50MB
         >>> SecurityConfig(verify_ssl=False)  # Для тестов
         >>> SecurityConfig(max_compression_ratio=10.0)  # Более строгая защита
+        >>> SecurityConfig(sensitive_url_params={'custom_token', 'app_key'})
     """
     max_response_size: int = 100 * 1024 * 1024  # 100MB
     max_decompressed_size: int = 500 * 1024 * 1024  # 500MB
     max_compression_ratio: float = 20.0  # 20:1 защита от decompression bomb
     verify_ssl: bool = True
     allow_redirects: bool = True
+    sensitive_url_params: Set[str] = field(default_factory=set)
 
     def __post_init__(self):
         """Валидация."""
