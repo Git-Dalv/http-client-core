@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import time
+from collections import OrderedDict
 from typing import Any, Dict, Optional, Set
 
 try:
@@ -67,7 +68,7 @@ class AsyncCachePlugin(AsyncPlugin):
         """
         self.ttl = ttl
         self.max_size = max_size
-        self.cache: Dict[str, Dict[str, Any]] = {}
+        self.cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()  # LRU ordering
         self._lock = asyncio.Lock()  # Async lock для thread-safety
         self._hits = 0
         self._misses = 0
@@ -125,12 +126,15 @@ class AsyncCachePlugin(AsyncPlugin):
 
             entry = self.cache[cache_key]
 
-            # Проверяем TTL
-            if time.time() - entry["timestamp"] > self.ttl:
+            # Проверяем TTL через expires_at
+            if time.time() >= entry["expires_at"]:
                 # Устарело - удаляем
                 del self.cache[cache_key]
                 self._misses += 1
                 return None
+
+            # Move to end for LRU ordering (mark as recently used)
+            self.cache.move_to_end(cache_key, last=True)
 
             self._hits += 1
             return entry["response"]
@@ -140,14 +144,14 @@ class AsyncCachePlugin(AsyncPlugin):
         async with self._lock:
             # Проверяем размер кэша
             if len(self.cache) >= self.max_size:
-                # Удаляем самую старую запись (простая FIFO стратегия)
-                oldest_key = min(self.cache.keys(), key=lambda k: self.cache[k]["timestamp"])
-                del self.cache[oldest_key]
+                # Удаляем самую старую запись (LRU) через OrderedDict.popitem(last=False)
+                # О(1) операция вместо O(n) через min()
+                self.cache.popitem(last=False)
 
-            # Сохраняем
+            # Сохраняем с expires_at для TTL validation
             self.cache[cache_key] = {
                 "response": response,
-                "timestamp": time.time(),
+                "expires_at": time.time() + self.ttl,
             }
 
     async def before_request(

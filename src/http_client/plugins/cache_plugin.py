@@ -5,6 +5,7 @@ import json
 import logging
 import threading
 import time
+from collections import OrderedDict
 from typing import Any, Dict, Optional, List, Set
 
 import requests
@@ -48,7 +49,7 @@ class CachePlugin(Plugin):
         """
         self.ttl = ttl
         self.max_size = max_size
-        self.cache: Dict[str, Dict[str, Any]] = {}
+        self.cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()  # LRU ordering
         self._lock = threading.RLock()  # Thread-safe protection for cache operations
         self._hits = 0
         self._misses = 0
@@ -95,37 +96,32 @@ class CachePlugin(Plugin):
         return hashlib.sha256(cache_string.encode()).hexdigest()[:32]
 
     def _is_cache_valid(self, cache_entry: Dict[str, Any]) -> bool:
-        """Проверяет, актуален ли кэш"""
+        """Проверяет, актуален ли кэш по TTL"""
         if not cache_entry:
             return False
 
-        cached_time = cache_entry.get("timestamp", 0)
-        current_time = time.time()
-
-        return (current_time - cached_time) < self.ttl
+        expires_at = cache_entry.get("expires_at", 0)
+        return time.time() < expires_at
 
     def _evict_if_needed(self):
         """
         Удаляет старые записи если кэш превысил max_size.
-        Использует LRU стратегию (удаляет самые старые по timestamp).
+        Использует LRU стратегию через OrderedDict (удаляет least recently used).
 
         Должен вызываться внутри lock!
         """
         if len(self.cache) < self.max_size:
             return
 
-        # Удаляем 10% самых старых записей для амортизации
+        # Удаляем 10% самых старых записей (LRU) для амортизации
+        # OrderedDict сохраняет порядок вставки/обновления (через move_to_end)
+        # Первые элементы - least recently used
         entries_to_remove = max(1, len(self.cache) // 10)
 
-        # Сортируем по timestamp (самые старые первые)
-        sorted_keys = sorted(
-            self.cache.keys(),
-            key=lambda k: self.cache[k].get("timestamp", 0)
-        )
-
-        # Удаляем старые записи
-        for key in sorted_keys[:entries_to_remove]:
-            del self.cache[key]
+        # Удаляем старые записи через popitem(last=False) - O(1) операция
+        for _ in range(entries_to_remove):
+            if len(self.cache) > 0:
+                self.cache.popitem(last=False)  # Remove least recently used (first item)
 
         logger.debug(f"Cache eviction: removed {entries_to_remove} entries, size now {len(self.cache)}")
 
@@ -141,6 +137,9 @@ class CachePlugin(Plugin):
             cache_entry = self.cache.get(cache_key)
 
             if self._is_cache_valid(cache_entry):
+                # Move to end for LRU ordering (mark as recently used)
+                self.cache.move_to_end(cache_key, last=True)
+
                 self._hits += 1
                 logger.debug(f"Cache HIT for {url}")
                 return cache_entry["response"]
@@ -158,7 +157,11 @@ class CachePlugin(Plugin):
         cache_key = self._generate_cache_key(method, url, **kwargs)
         with self._lock:
             self._evict_if_needed()
-            self.cache[cache_key] = {"response": response, "timestamp": time.time()}
+            # Store with expiration time (not timestamp) for TTL validation
+            self.cache[cache_key] = {
+                "response": response,
+                "expires_at": time.time() + self.ttl
+            }
 
     def clear_cache(self):
         """Очищает весь кэш"""
