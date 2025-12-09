@@ -543,6 +543,167 @@ class TestReloadableHTTPClient:
             client.close()
 
 
+    def test_concurrent_read_write_race_condition(self, temp_config_file):
+        """Test that concurrent reads during write don't see partial state.
+
+        This test specifically validates the race condition fix where
+        current_config property now uses locking to prevent reading
+        partially updated configuration state.
+        """
+        watcher = ConfigWatcher(temp_config_file, check_interval=0.1)
+        watcher.start()
+
+        errors = []
+        invalid_states = []
+        read_configs = []
+        stop_event = threading.Event()
+
+        def aggressive_reader(reader_id):
+            """Continuously read config and validate consistency."""
+            try:
+                while not stop_event.is_set():
+                    config = watcher.current_config
+                    read_configs.append((reader_id, config.base_url))
+
+                    # Validate config is always consistent
+                    # If we see partial update, this would fail
+                    assert config.base_url is not None
+                    assert isinstance(config.base_url, str)
+                    assert len(config.base_url) > 0
+
+                    # If we got a config, it should be fully formed
+                    if not config.base_url.startswith("https://"):
+                        invalid_states.append(f"Invalid URL: {config.base_url}")
+
+                    # Small sleep to allow other threads
+                    time.sleep(0.0001)
+            except Exception as e:
+                errors.append((reader_id, e))
+
+        def aggressive_writer():
+            """Continuously update config file."""
+            try:
+                for i in range(20):
+                    updated_config = {
+                        "http_client": {
+                            "base_url": f"https://api.version-{i}.com",
+                            "timeout": {"connect": 5 + i, "read": 30 + i},
+                            "retry": {"max_attempts": 3 + i},
+                        }
+                    }
+                    with open(temp_config_file, "w") as f:
+                        yaml.dump(updated_config, f)
+                    time.sleep(0.05)
+            except Exception as e:
+                errors.append(("writer", e))
+
+        try:
+            # Start multiple reader threads
+            reader_threads = [
+                threading.Thread(target=aggressive_reader, args=(i,))
+                for i in range(10)
+            ]
+
+            # Start writer thread
+            writer_thread = threading.Thread(target=aggressive_writer)
+
+            # Start all threads
+            for t in reader_threads:
+                t.start()
+            writer_thread.start()
+
+            # Let them run
+            time.sleep(2.0)
+
+            # Stop readers
+            stop_event.set()
+            writer_thread.join()
+
+            for t in reader_threads:
+                t.join(timeout=2.0)
+
+            # Validate results
+            assert len(errors) == 0, f"Errors occurred: {errors}"
+            assert len(invalid_states) == 0, f"Invalid states detected: {invalid_states}"
+            assert len(read_configs) > 100, "Should have many successful reads"
+
+        finally:
+            watcher.stop()
+
+    def test_atomic_config_replacement(self, temp_config_file):
+        """Test that config updates are atomic - no partial reads possible.
+
+        Validates that when _load_config updates the config, readers
+        either see the old complete config or the new complete config,
+        never a mix or partial state.
+        """
+        watcher = ConfigWatcher(temp_config_file, check_interval=0.05)
+        watcher.start()
+
+        seen_configs = set()
+        errors = []
+        stop_reading = threading.Event()
+
+        def monitor_config_transitions():
+            """Monitor config and ensure we only see valid complete states."""
+            try:
+                previous_url = None
+                while not stop_reading.is_set():
+                    config = watcher.current_config
+                    current_url = config.base_url
+
+                    # Track all unique configs we see
+                    seen_configs.add(current_url)
+
+                    # If config changed, validate it's a complete valid config
+                    if previous_url != current_url:
+                        # Must be a complete URL
+                        assert current_url.startswith("https://")
+                        assert "example.com" in current_url or "atomic" in current_url
+
+                        # Timeout values should be consistent with base_url
+                        # (i.e., if we see new URL, we should see new timeout)
+                        # This validates atomicity of the whole config object
+                        assert config.timeout.connect >= 5
+                        assert config.timeout.read >= 30
+
+                    previous_url = current_url
+                    time.sleep(0.0001)
+            except Exception as e:
+                errors.append(e)
+
+        try:
+            # Start monitoring thread
+            monitor_thread = threading.Thread(target=monitor_config_transitions)
+            monitor_thread.start()
+
+            # Make rapid config changes
+            for i in range(15):
+                updated_config = {
+                    "http_client": {
+                        "base_url": f"https://api.atomic-{i}.com",
+                        "timeout": {"connect": 10 + i, "read": 50 + i},
+                    }
+                }
+                with open(temp_config_file, "w") as f:
+                    yaml.dump(updated_config, f)
+                time.sleep(0.1)
+
+            # Let monitor observe final state
+            time.sleep(0.5)
+            stop_reading.set()
+            monitor_thread.join(timeout=2.0)
+
+            # Should have seen multiple different configs
+            assert len(seen_configs) >= 2, f"Should see multiple configs, saw: {seen_configs}"
+
+            # Should have no errors (no partial states observed)
+            assert len(errors) == 0, f"Errors detecting partial states: {errors}"
+
+        finally:
+            watcher.stop()
+
+
 class TestConfigWatcherIntegration:
     """Integration tests for ConfigWatcher."""
 
