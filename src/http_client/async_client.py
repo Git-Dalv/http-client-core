@@ -371,6 +371,134 @@ class AsyncHTTPClient:
         """OPTIONS запрос."""
         return await self.request("OPTIONS", url, **kwargs)
 
+    # ==================== File Download ====================
+
+    async def download(
+        self,
+        url: str,
+        file_path: str,
+        chunk_size: int = 8192,
+        progress_callback: Optional[callable] = None,
+        **kwargs
+    ) -> int:
+        """
+        Асинхронная загрузка большого файла с streaming для избежания проблем с памятью.
+
+        Args:
+            url: URL для загрузки
+            file_path: Путь для сохранения файла
+            chunk_size: Размер chunk для загрузки (по умолчанию 8KB)
+            progress_callback: Опциональный callback(downloaded_bytes, total_bytes)
+                              для отслеживания прогресса
+            **kwargs: Дополнительные параметры запроса
+
+        Returns:
+            Всего байт загружено
+
+        Raises:
+            ResponseTooLargeError: Если размер файла превышает максимально допустимый
+            HTTPError: При ошибках HTTP
+            IOError: При ошибках записи файла
+
+        Example:
+            >>> async with AsyncHTTPClient(base_url="https://example.com") as client:
+            ...     # Простая загрузка
+            ...     bytes_downloaded = await client.download("/large-file.zip", "output.zip")
+            ...     print(f"Downloaded {bytes_downloaded} bytes")
+            ...
+            ...     # С callback для прогресса
+            ...     def on_progress(downloaded, total):
+            ...         if total > 0:
+            ...             percent = (downloaded / total) * 100
+            ...             print(f"Progress: {percent:.1f}%")
+            ...
+            ...     await client.download("/file.zip", "output.zip", progress_callback=on_progress)
+        """
+        import os
+
+        # Check if aiofiles is available
+        try:
+            import aiofiles
+            use_aiofiles = True
+        except ImportError:
+            use_aiofiles = False
+            warnings.warn(
+                "aiofiles not installed. File I/O will block the event loop. "
+                "Install with: pip install aiofiles",
+                stacklevel=2
+            )
+
+        client = await self._get_client()
+        downloaded = 0
+        max_size = self._config.security.max_response_size
+
+        try:
+            # Используем streaming response
+            async with client.stream("GET", url, **kwargs) as response:
+                response.raise_for_status()
+
+                # Получаем общий размер если доступен
+                total_size = int(response.headers.get('Content-Length', 0))
+
+                # Проверяем размер до начала загрузки
+                if total_size > 0 and total_size > max_size:
+                    raise ResponseTooLargeError(
+                        f"File size ({total_size} bytes) exceeds maximum "
+                        f"({max_size} bytes)",
+                        url=str(response.url),
+                        size=total_size,
+                        max_size=max_size
+                    )
+
+                # Загружаем файл chunk по chunk
+                if use_aiofiles:
+                    # Async file I/O
+                    async with aiofiles.open(file_path, 'wb') as f:
+                        async for chunk in response.aiter_bytes(chunk_size):
+                            if chunk:  # Фильтруем keep-alive chunks
+                                # Проверяем размер ПЕРЕД записью для предотвращения переполнения диска
+                                downloaded += len(chunk)
+                                if downloaded > max_size:
+                                    raise ResponseTooLargeError(
+                                        f"Downloaded size ({downloaded} bytes) exceeds maximum "
+                                        f"({max_size} bytes)",
+                                        url=str(response.url),
+                                        size=downloaded,
+                                        max_size=max_size
+                                    )
+
+                                await f.write(chunk)
+
+                                if progress_callback:
+                                    progress_callback(downloaded, total_size)
+                else:
+                    # Sync file I/O (блокирует event loop, но без доп. зависимостей)
+                    with open(file_path, 'wb') as f:
+                        async for chunk in response.aiter_bytes(chunk_size):
+                            if chunk:
+                                downloaded += len(chunk)
+                                if downloaded > max_size:
+                                    raise ResponseTooLargeError(
+                                        f"Downloaded size ({downloaded} bytes) exceeds maximum "
+                                        f"({max_size} bytes)",
+                                        url=str(response.url),
+                                        size=downloaded,
+                                        max_size=max_size
+                                    )
+
+                                f.write(chunk)
+
+                                if progress_callback:
+                                    progress_callback(downloaded, total_size)
+
+            return downloaded
+
+        except Exception as e:
+            # Очищаем частично загруженный файл при ошибке
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise
+
     # ==================== Плагины ====================
 
     def add_plugin(self, plugin: Plugin) -> None:

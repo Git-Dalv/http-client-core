@@ -79,3 +79,162 @@ class TestAsyncHTTPClientHealthCheck:
 
             assert health["connectivity"]["reachable"] is True
             assert health["connectivity"]["status_code"] == 200
+
+
+class TestAsyncHTTPClientDownload:
+    """Test async download method."""
+
+    @pytest.mark.asyncio
+    async def test_download_basic(self, tmp_path):
+        """Test basic file download."""
+        import os
+
+        output_file = tmp_path / "test_file.txt"
+
+        async with AsyncHTTPClient() as client:
+            # Download a small file
+            bytes_downloaded = await client.download(
+                "https://httpbin.org/bytes/1024",
+                str(output_file)
+            )
+
+            assert bytes_downloaded == 1024
+            assert os.path.exists(output_file)
+            assert os.path.getsize(output_file) == 1024
+
+    @pytest.mark.asyncio
+    async def test_download_with_progress_callback(self, tmp_path):
+        """Test download with progress callback."""
+        output_file = tmp_path / "test_file.txt"
+        progress_calls = []
+
+        def on_progress(downloaded, total):
+            progress_calls.append((downloaded, total))
+
+        async with AsyncHTTPClient() as client:
+            await client.download(
+                "https://httpbin.org/bytes/2048",
+                str(output_file),
+                progress_callback=on_progress
+            )
+
+            # Verify progress was tracked
+            assert len(progress_calls) > 0
+            # Last call should have total bytes
+            last_downloaded, last_total = progress_calls[-1]
+            assert last_downloaded == 2048
+
+    @pytest.mark.asyncio
+    async def test_download_custom_chunk_size(self, tmp_path):
+        """Test download with custom chunk size."""
+        output_file = tmp_path / "test_file.txt"
+
+        async with AsyncHTTPClient() as client:
+            bytes_downloaded = await client.download(
+                "https://httpbin.org/bytes/4096",
+                str(output_file),
+                chunk_size=1024
+            )
+
+            assert bytes_downloaded == 4096
+
+    @pytest.mark.asyncio
+    async def test_download_size_limit_exceeded(self, tmp_path):
+        """Test that download fails when size exceeds limit."""
+        from src.http_client.core.exceptions import ResponseTooLargeError
+        from src.http_client.core.config import HTTPClientConfig, SecurityConfig
+
+        output_file = tmp_path / "test_file.txt"
+
+        # Create client with very small size limit
+        config = HTTPClientConfig.create(
+            verify_ssl=True
+        )
+        config = HTTPClientConfig(
+            base_url=config.base_url,
+            headers=config.headers,
+            proxies=config.proxies,
+            timeout=config.timeout,
+            retry=config.retry,
+            pool=config.pool,
+            security=SecurityConfig(max_response_size=100),  # Only 100 bytes
+            circuit_breaker=config.circuit_breaker,
+            logging=config.logging
+        )
+
+        async with AsyncHTTPClient(config=config) as client:
+            with pytest.raises(ResponseTooLargeError) as exc_info:
+                await client.download(
+                    "https://httpbin.org/bytes/1024",
+                    str(output_file)
+                )
+
+            # Verify file was cleaned up
+            import os
+            assert not os.path.exists(output_file)
+
+    @pytest.mark.asyncio
+    async def test_download_http_error(self, tmp_path):
+        """Test download handles HTTP errors."""
+        import httpx
+
+        output_file = tmp_path / "test_file.txt"
+
+        async with AsyncHTTPClient() as client:
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.download(
+                    "https://httpbin.org/status/404",
+                    str(output_file)
+                )
+
+            # Verify file was cleaned up
+            import os
+            assert not os.path.exists(output_file)
+
+    @pytest.mark.asyncio
+    async def test_download_cleanup_on_error(self, tmp_path):
+        """Test that partial file is cleaned up on error."""
+        from src.http_client.core.exceptions import ResponseTooLargeError
+        from src.http_client.core.config import HTTPClientConfig, SecurityConfig
+        import os
+
+        output_file = tmp_path / "test_file.txt"
+
+        # Create client with size limit that will be exceeded mid-download
+        config = HTTPClientConfig.create(verify_ssl=True)
+        config = HTTPClientConfig(
+            base_url=config.base_url,
+            headers=config.headers,
+            proxies=config.proxies,
+            timeout=config.timeout,
+            retry=config.retry,
+            pool=config.pool,
+            security=SecurityConfig(max_response_size=512),  # Will fail mid-download
+            circuit_breaker=config.circuit_breaker,
+            logging=config.logging
+        )
+
+        async with AsyncHTTPClient(config=config) as client:
+            with pytest.raises(ResponseTooLargeError):
+                await client.download(
+                    "https://httpbin.org/bytes/2048",
+                    str(output_file),
+                    chunk_size=256
+                )
+
+            # Verify partial file was removed
+            assert not os.path.exists(output_file)
+
+    @pytest.mark.asyncio
+    async def test_download_returns_bytes_downloaded(self, tmp_path):
+        """Test that download returns correct byte count."""
+        output_file = tmp_path / "test_file.txt"
+
+        async with AsyncHTTPClient() as client:
+            bytes_downloaded = await client.download(
+                "https://httpbin.org/bytes/512",
+                str(output_file)
+            )
+
+            assert isinstance(bytes_downloaded, int)
+            assert bytes_downloaded == 512
