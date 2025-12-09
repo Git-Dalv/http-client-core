@@ -216,15 +216,22 @@ class ProxyPool:
             **{k: v for k, v in metadata.items() if k in ["country", "region", "speed"]}
         )
 
+        # First check for duplicates without lock (fast path)
         with self._lock:
-            # Проверяем дубликаты
             if any(p.host == host and p.port == port for p in self._proxies):
                 raise ValueError(f"Proxy {host}:{port} already exists in pool")
 
-            # Проверяем работоспособность если включено
-            if self._check_on_add:
-                if not self._check_proxy(proxy):
-                    raise ValueError(f"Proxy {host}:{port} is not working")
+        # Check proxy availability OUTSIDE lock (prevents blocking pool during HTTP request)
+        # This is the key fix: HTTP request can take seconds, so we do it without holding lock
+        if self._check_on_add:
+            if not self._check_proxy(proxy):
+                raise ValueError(f"Proxy {host}:{port} is not working")
+
+        # Final add with double-checked locking to prevent race conditions
+        with self._lock:
+            # Double-check for duplicates (in case another thread added same proxy while we were checking)
+            if any(p.host == host and p.port == port for p in self._proxies):
+                raise ValueError(f"Proxy {host}:{port} already exists in pool")
 
             self._proxies.append(proxy)
         return proxy
@@ -241,10 +248,14 @@ class ProxyPool:
         Args:
             proxies: Список прокси в формате "host:port" или "user:pass@host:port"
             proxy_type: Тип прокси для всех
-            check_all: Проверить все прокси перед добавлением
+            check_all: Проверить все прокси после добавления (параллельно)
 
         Returns:
             Количество успешно добавленных прокси
+
+        Note:
+            Thread-safe: каждый add_proxy() вызов не блокирует пул во время HTTP проверки.
+            check_all выполняется параллельно после добавления всех прокси.
 
         Example:
             proxies = [
@@ -256,6 +267,7 @@ class ProxyPool:
         """
         added = 0
 
+        # Each add_proxy() call is thread-safe and doesn't block pool during HTTP checks
         for proxy_str in proxies:
             try:
                 # Парсим строку
