@@ -91,7 +91,8 @@ class CachePlugin(Plugin):
         }
 
         cache_string = json.dumps(cache_data, sort_keys=True)
-        return hashlib.md5(cache_string.encode()).hexdigest()
+        # Use SHA256 instead of MD5 for better security (truncate to 32 chars to preserve key length)
+        return hashlib.sha256(cache_string.encode()).hexdigest()[:32]
 
     def _is_cache_valid(self, cache_entry: Dict[str, Any]) -> bool:
         """Проверяет, актуален ли кэш"""
