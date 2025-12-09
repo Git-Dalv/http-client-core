@@ -1197,19 +1197,20 @@ class HTTPClient:
             with open(file_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=chunk_size):
                     if chunk:  # Filter out keep-alive chunks
-                        f.write(chunk)
+                        # Check size limit BEFORE writing to prevent disk exhaustion
                         downloaded += len(chunk)
-
-                        if progress_bar:
-                            progress_bar.update(len(chunk))
-
-                        # Check size limit
                         if downloaded > self._config.security.max_response_size:
                             raise ResponseTooLargeError(
-                                f"Downloaded size ({downloaded} bytes) exceeds maximum",
+                                f"Downloaded size ({downloaded} bytes) exceeds maximum "
+                                f"({self._config.security.max_response_size} bytes)",
                                 url=url,
                                 size=downloaded
                             )
+
+                        f.write(chunk)
+
+                        if progress_bar:
+                            progress_bar.update(len(chunk))
 
             if progress_bar:
                 progress_bar.close()

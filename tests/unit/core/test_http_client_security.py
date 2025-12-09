@@ -127,6 +127,82 @@ def test_download_size_limit():
 
 
 @responses.activate
+def test_download_size_limit_no_content_length():
+    """Download fails when size limit exceeded without Content-Length header.
+
+    This test validates chunk-level size validation that protects against
+    disk exhaustion attacks when the server doesn't send Content-Length header.
+    """
+    # Generate 150MB of data (exceeds default 100MB limit)
+    # Server doesn't send Content-Length header
+    large_data = b"x" * (150 * 1024 * 1024)
+
+    responses.add(
+        responses.GET,
+        "https://api.example.com/stream.bin",
+        body=large_data,
+        stream=True
+        # Note: No Content-Length header
+    )
+
+    client = HTTPClient(base_url="https://api.example.com")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = os.path.join(tmpdir, "stream.bin")
+
+        # Should raise ResponseTooLargeError during chunk download
+        with pytest.raises(ResponseTooLargeError) as exc_info:
+            client.download("/stream.bin", tmp_path)
+
+        # Verify error message mentions exceeded size
+        assert "exceeds maximum" in str(exc_info.value)
+
+        # Partial file should be cleaned up
+        assert not os.path.exists(tmp_path), "Partial file should be removed on error"
+
+
+@responses.activate
+def test_download_chunk_validation_edge_case():
+    """Test chunk-level validation catches size limit at boundary.
+
+    Validates that the check happens BEFORE writing the chunk that
+    would exceed the limit, preventing any excess data from being written.
+    """
+    # Set a small custom limit
+    security_cfg = SecurityConfig(max_response_size=10_000)  # 10KB limit
+    config = HTTPClientConfig(
+        base_url="https://api.example.com",
+        security=security_cfg
+    )
+    client = HTTPClient(config=config)
+
+    # Generate data that will exceed limit (20KB)
+    large_data = b"x" * 20_000
+
+    responses.add(
+        responses.GET,
+        "https://api.example.com/data.bin",
+        body=large_data,
+        stream=True
+        # No Content-Length header to force chunk-by-chunk validation
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = os.path.join(tmpdir, "data.bin")
+
+        with pytest.raises(ResponseTooLargeError) as exc_info:
+            # Use small chunk size to test chunk-level validation
+            client.download("/data.bin", tmp_path, chunk_size=4096)
+
+        # Verify error details
+        assert exc_info.value.size > 10_000
+        assert "10000 bytes" in str(exc_info.value)
+
+        # File should be cleaned up
+        assert not os.path.exists(tmp_path)
+
+
+@responses.activate
 def test_correlation_id_added():
     """Correlation ID добавляется автоматически."""
     responses.add(responses.GET, "https://api.example.com/test", json={"ok": True})
