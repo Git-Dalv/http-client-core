@@ -1,0 +1,79 @@
+# Example HTTPClient configuration file (YAML format)
+#
+# This file demonstrates all available configuration options.
+# You can use this as a template for your own configuration.
+#
+# Usage:
+#   from http_client import HTTPClient
+#   from http_client.core.env_config import ConfigFileLoader
+#
+#   config = ConfigFileLoader.from_yaml("config.yaml")
+#   client = HTTPClient(config=config)
+
+http_client:
+  # Base URL for all requests (optional)
+  # Can be overridden per-request with absolute URLs
+  base_url: "https://api.example.com"
+
+  # HTTP headers to include in all requests
+  headers:
+    User-Agent: "MyApp/1.0"
+    Accept: "application/json"
+    # X-API-Key: "your-api-key"  # Uncomment and set your API key
+
+  # Proxy configuration (optional)
+  # proxies:
+  #   http: "http://proxy.example.com:8080"
+  #   https: "https://proxy.example.com:8080"
+
+  # Timeout configuration (seconds)
+  timeout:
+    connect: 5      # Connection timeout
+    read: 30        # Read timeout
+    total: 60       # Total request timeout (optional)
+
+  # Retry configuration
+  retry:
+    max_attempts: 3           # Total attempts (including initial request)
+    backoff_base: 0.5         # Base delay in seconds
+    backoff_factor: 2.0       # Exponential backoff multiplier
+    backoff_max: 60.0         # Maximum backoff delay
+    backoff_jitter: true      # Add random jitter to prevent thundering herd
+    retry_on_status:          # HTTP status codes to retry
+      - 408  # Request Timeout
+      - 429  # Too Many Requests
+      - 500  # Internal Server Error
+      - 502  # Bad Gateway
+      - 503  # Service Unavailable
+      - 504  # Gateway Timeout
+
+  # Connection pool configuration
+  pool:
+    connections: 10           # Number of connection pools to cache
+    maxsize: 10              # Maximum connections per pool
+    block: false             # Block when pool is full
+    max_redirects: 30        # Maximum number of redirects to follow
+
+  # Security configuration
+  security:
+    verify_ssl: true                      # Verify SSL certificates
+    allow_redirects: true                 # Allow HTTP redirects
+    max_response_size: 104857600         # Max response size (100MB)
+    max_decompressed_size: 524288000     # Max decompressed size (500MB)
+    max_compression_ratio: 20.0          # Max compression ratio (decompression bomb protection)
+
+  # Circuit breaker configuration (optional, disabled by default)
+  circuit_breaker:
+    enabled: false                # Enable circuit breaker
+    failure_threshold: 5          # Number of failures before opening circuit
+    recovery_timeout: 30.0        # Seconds before attempting recovery
+    half_open_max_calls: 3        # Max calls in half-open state
+
+  # Logging configuration (optional)
+  logging:
+    level: "INFO"                 # Log level: DEBUG, INFO, WARNING, ERROR
+    format: "text"                # Format: "text" or "json"
+    enable_console: true          # Enable console logging
+    enable_file: false            # Enable file logging
+    # file_path: "/var/log/http-client.log"  # Log file path (if enable_file=true)
+    enable_correlation_id: false  # Add correlation IDs to logs

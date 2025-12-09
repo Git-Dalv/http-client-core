@@ -30,6 +30,7 @@ pip install http-client-core[progress]    # Progress bars for downloads
 pip install http-client-core[async]       # Async client (httpx)
 pip install http-client-core[cache]       # Disk caching
 pip install http-client-core[otel]        # OpenTelemetry tracing & metrics
+pip install http-client-core[yaml]        # YAML config file support
 
 # With all optional dependencies
 pip install http-client-core[all]
@@ -47,6 +48,116 @@ print(response.json())
 
 # POST with JSON
 response = client.post("/users", json={"name": "John", "email": "john@example.com"})
+```
+
+## 📝 Configuration Files
+
+Load configuration from YAML or JSON files for easier management and deployment:
+
+### YAML Configuration
+
+```bash
+# Install YAML support
+pip install http-client-core[yaml]
+```
+
+```python
+from http_client import HTTPClient
+from http_client.core.env_config import ConfigFileLoader
+
+# Load from YAML file
+config = ConfigFileLoader.from_yaml("config.yaml")
+client = HTTPClient(config=config)
+
+# Or auto-detect format by extension
+config = ConfigFileLoader.from_file("config.yaml")
+client = HTTPClient(config=config)
+
+# Or use environment variable
+# export HTTP_CLIENT_CONFIG_FILE=/path/to/config.yaml
+config = ConfigFileLoader.from_env_path()
+if config:
+    client = HTTPClient(config=config)
+```
+
+**Example config.yaml:**
+
+```yaml
+http_client:
+  base_url: "https://api.example.com"
+
+  headers:
+    Authorization: "Bearer YOUR_TOKEN_HERE"
+    User-Agent: "MyApp/1.0"
+
+  timeout:
+    connect: 5
+    read: 30
+    total: 60
+
+  retry:
+    max_attempts: 3
+    backoff_factor: 2.0
+    backoff_jitter: true
+
+  security:
+    verify_ssl: true
+    max_response_size: 104857600  # 100MB
+```
+
+### JSON Configuration
+
+```python
+from http_client.core.env_config import ConfigFileLoader
+
+# Load from JSON file
+config = ConfigFileLoader.from_json("config.json")
+client = HTTPClient(config=config)
+```
+
+**Example config.json:**
+
+```json
+{
+  "http_client": {
+    "base_url": "https://api.example.com",
+    "headers": {
+      "Authorization": "Bearer YOUR_TOKEN_HERE"
+    },
+    "timeout": {
+      "connect": 5,
+      "read": 30
+    },
+    "retry": {
+      "max_attempts": 3
+    }
+  }
+}
+```
+
+### Configuration Examples
+
+See complete configuration examples in [docs/examples/](docs/examples/):
+- [config.yaml](docs/examples/config.yaml) - Full example with all options
+- [config-minimal.yaml](docs/examples/config-minimal.yaml) - Minimal configuration
+- [config-production.yaml](docs/examples/config-production.yaml) - Production-ready setup
+- [config-kubernetes.yaml](docs/examples/config-kubernetes.yaml) - Kubernetes ConfigMap
+
+### Environment Variable
+
+Set `HTTP_CLIENT_CONFIG_FILE` to automatically load configuration:
+
+```bash
+export HTTP_CLIENT_CONFIG_FILE=/etc/myapp/http-client.yaml
+```
+
+```python
+from http_client import HTTPClient
+from http_client.core.env_config import ConfigFileLoader
+
+# Automatically loads from HTTP_CLIENT_CONFIG_FILE
+config = ConfigFileLoader.from_env_path()
+client = HTTPClient(config=config)
 ```
 
 ## 🎯 Basic Examples
