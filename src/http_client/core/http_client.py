@@ -834,6 +834,11 @@ class HTTPClient:
                     internal_params = {k: v for k, v in kwargs.items() if k.startswith('_')}
                     clean_kwargs = {k: v for k, v in kwargs.items() if not k.startswith('_')}
 
+                    # Enable streaming for decompression bomb protection
+                    # We'll read the content manually with validation
+                    if 'stream' not in clean_kwargs:
+                        clean_kwargs['stream'] = True
+
                     # Make request (using thread-local session)
                     response = self.session.request(
                         method=method,
@@ -852,7 +857,7 @@ class HTTPClient:
                     # Check status
                     response.raise_for_status()
 
-                    # Validate response size
+                    # Validate response size (header-based check first - doesn't load content)
                     content_length = response.headers.get('Content-Length')
                     if content_length:
                         size = int(content_length)
@@ -864,58 +869,120 @@ class HTTPClient:
                                 size=size
                             )
 
-                    # Check actual content size (if Content-Length not present)
-                    if len(response.content) > self._config.security.max_response_size:
-                        raise ResponseTooLargeError(
-                            f"Response size ({len(response.content)} bytes) exceeds maximum "
-                            f"({self._config.security.max_response_size} bytes)",
-                            url=url,
-                            size=len(response.content)
-                        )
-
-                    # Check for decompression bomb (after size check)
+                    # Check for decompression bomb with TRUE streaming validation
+                    # Now that we use stream=True, we can read from raw stream incrementally
                     if 'gzip' in response.headers.get('Content-Encoding', '').lower():
-                        compressed_size = len(response.content)
-                        # Try to get uncompressed size from response
                         try:
-                            import gzip
-                            import io
+                            import zlib
 
-                            # Peek at decompressed size
-                            with gzip.GzipFile(fileobj=io.BytesIO(response.content)) as gz:
-                                # Read in chunks to avoid loading everything
-                                uncompressed_size = 0
-                                chunk_size = 8192
-                                while True:
-                                    chunk = gz.read(chunk_size)
-                                    if not chunk:
-                                        break
-                                    uncompressed_size += len(chunk)
+                            # Disable auto-decode to access raw compressed bytes
+                            response.raw.decode_content = False
 
-                                    # Check ratio on the fly (защита от decompression bomb)
-                                    if compressed_size > 0:
-                                        ratio = uncompressed_size / compressed_size
-                                        if ratio > self._config.security.max_compression_ratio:
-                                            raise DecompressionBombError(
-                                                f"Potential decompression bomb detected: "
-                                                f"ratio {ratio:.1f}:1 (compressed: {compressed_size}, "
-                                                f"uncompressed: {uncompressed_size}+) "
-                                                f"exceeds max allowed ratio {self._config.security.max_compression_ratio}:1",
-                                                url=url
-                                            )
+                            # Streaming validation: read compressed chunks and decompress on-the-fly
+                            compressed_size = 0
+                            decompressed_size = 0
+                            decompressed_chunks = []
 
-                                    # Also check absolute size
-                                    if uncompressed_size > self._config.security.max_decompressed_size:
+                            # Create incremental gzip decompressor (zlib with gzip header)
+                            # 16 + zlib.MAX_WBITS = gzip format
+                            decomp_obj = zlib.decompressobj(16 + zlib.MAX_WBITS)
+
+                            chunk_size = 8192  # 8KB chunks for efficient streaming
+                            max_ratio = self._config.security.max_compression_ratio
+                            max_decompressed_size = self._config.security.max_decompressed_size
+
+                            # Read compressed data from network stream and decompress incrementally
+                            while True:
+                                # Read compressed chunk from raw stream (directly from network)
+                                compressed_chunk = response.raw.read(chunk_size)
+                                if not compressed_chunk:
+                                    break
+
+                                compressed_size += len(compressed_chunk)
+
+                                # Decompress incrementally
+                                try:
+                                    decompressed_chunk = decomp_obj.decompress(compressed_chunk)
+                                    if decompressed_chunk:
+                                        decompressed_size += len(decompressed_chunk)
+                                        decompressed_chunks.append(decompressed_chunk)
+                                except zlib.error as e:
+                                    # Invalid gzip data
+                                    raise DecompressionBombError(f"Invalid gzip data: {e}", url=url)
+
+                                # Check compression ratio IMMEDIATELY after each chunk (abort early!)
+                                if compressed_size > 0:
+                                    ratio = decompressed_size / compressed_size
+                                    if ratio > max_ratio:
                                         raise DecompressionBombError(
-                                            f"Decompressed size ({uncompressed_size} bytes) exceeds maximum "
-                                            f"({self._config.security.max_decompressed_size} bytes)",
+                                            f"Decompression bomb detected during streaming: "
+                                            f"ratio {ratio:.1f}:1 (compressed: {compressed_size}, "
+                                            f"decompressed: {decompressed_size}) "
+                                            f"exceeds max allowed ratio {max_ratio}:1. "
+                                            f"Download aborted to prevent OOM attack.",
                                             url=url
                                         )
+
+                                # Check absolute decompressed size (prevent memory exhaustion)
+                                if decompressed_size > max_decompressed_size:
+                                    raise DecompressionBombError(
+                                        f"Decompressed size ({decompressed_size} bytes) exceeds maximum "
+                                        f"({max_decompressed_size} bytes) during streaming. "
+                                        f"Download aborted to prevent memory exhaustion.",
+                                        url=url
+                                    )
+
+                            # Flush any remaining buffered data
+                            try:
+                                final_chunk = decomp_obj.flush()
+                                if final_chunk:
+                                    decompressed_size += len(final_chunk)
+                                    decompressed_chunks.append(final_chunk)
+
+                                    # Final ratio check
+                                    if compressed_size > 0:
+                                        ratio = decompressed_size / compressed_size
+                                        if ratio > max_ratio:
+                                            raise DecompressionBombError(
+                                                f"Decompression bomb detected: "
+                                                f"final ratio {ratio:.1f}:1 (compressed: {compressed_size}, "
+                                                f"decompressed: {decompressed_size}) "
+                                                f"exceeds max allowed ratio {max_ratio}:1",
+                                                url=url
+                                            )
+                            except zlib.error:
+                                pass  # Ignore flush errors
+
+                            # Store decompressed content in response (backward compatibility)
+                            # This allows response.content to work as expected
+                            response._content = b''.join(decompressed_chunks)
+                            response._content_consumed = True
+
                         except DecompressionBombError:
+                            # Re-raise bomb detection errors
                             raise
-                        except Exception:
-                            # If we can't check, proceed cautiously
-                            pass
+                        except Exception as e:
+                            # If streaming validation fails for any other reason,
+                            # fall back to letting requests handle it normally
+                            logger.warning("Decompression bomb check failed: %s. Proceeding cautiously.", e)
+                            # Re-enable auto-decode and let requests handle it
+                            response.raw.decode_content = True
+                    else:
+                        # For non-gzip responses, read content normally
+                        # This ensures response.content works as expected
+                        response._content = response.raw.read()
+                        response._content_consumed = True
+
+                    # Check actual content size for non-gzip responses (if Content-Length not present)
+                    # For gzip responses, content is already validated above during streaming decompression
+                    if 'gzip' not in response.headers.get('Content-Encoding', '').lower():
+                        if len(response.content) > self._config.security.max_response_size:
+                            raise ResponseTooLargeError(
+                                f"Response size ({len(response.content)} bytes) exceeds maximum "
+                                f"({self._config.security.max_response_size} bytes)",
+                                url=url,
+                                size=len(response.content)
+                            )
 
                     # After response hooks (support both v1 and v2 APIs)
                     for plugin in self._plugins:
