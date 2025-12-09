@@ -31,7 +31,8 @@ class LoggingPlugin(Plugin):
         warnings.warn(
             "LoggingPlugin is deprecated and will be removed in v2.0.0. "
             "Use HTTPClientConfig.logging instead. "
-            "Example: config = HTTPClientConfig.create(logging=LoggingConfig.create(...))",
+            "Example: config = HTTPClientConfig.create(logging=LoggingConfig.create(...)). "
+            "Migration guide: https://github.com/Git-Dalv/http-client-core/blob/main/docs/migration/v1-to-v2.md",
             DeprecationWarning,
             stacklevel=2
         )

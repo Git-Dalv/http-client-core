@@ -1,9 +1,11 @@
 # HTTP Client Core
 
+[![Version](https://img.shields.io/badge/version-1.5.0-blue)](https://github.com/Git-Dalv/http-client-core)
 [![Tests](https://img.shields.io/badge/tests-415%20passed-brightgreen)](https://github.com/Git-Dalv/http-client-core)
 [![Coverage](https://img.shields.io/badge/coverage-85%25-green)](https://github.com/Git-Dalv/http-client-core)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Migration Guide](https://img.shields.io/badge/migration-v1%20to%20v2-orange)](docs/migration/v1-to-v2.md)
 
 Production-ready HTTP client library with powerful plugin system, intelligent retry logic, and comprehensive error handling.
 
@@ -49,6 +51,63 @@ print(response.json())
 # POST with JSON
 response = client.post("/users", json={"name": "John", "email": "john@example.com"})
 ```
+
+## ⚠️ Deprecation Notices
+
+**Important for existing users**: Some APIs are deprecated and will be removed in v2.0.0.
+
+### Deprecated Features
+
+- **LoggingPlugin** ➜ Use `HTTPClientConfig.logging` instead
+- **Constructor parameters** ➜ Use structured config objects:
+  - `max_retries` ➜ `config.retry.max_attempts`
+  - `pool_connections` ➜ `config.pool.pool_connections`
+  - `pool_maxsize` ➜ `config.pool.pool_maxsize`
+  - `max_redirects` ➜ `config.pool.max_redirects`
+  - `verify_ssl` ➜ `config.security.verify_ssl`
+
+### Migration Timeline
+
+- **v1.5.0** (Current): Deprecation warnings added
+- **v1.9.0**: Warnings become errors in strict mode
+- **v2.0.0**: Deprecated APIs removed
+
+### Migration Tools
+
+**Check your code for deprecated usage:**
+
+```bash
+# Check single file
+python -m http_client.tools.migration_check your_code.py
+
+# Check entire project
+python -m http_client.tools.migration_check src/ --recursive
+
+# Test with strict mode (converts warnings to errors)
+HTTP_CLIENT_STRICT_DEPRECATION=1 python -m pytest tests/
+```
+
+**Example migration:**
+
+```python
+# ❌ Old (v1.x - Deprecated)
+from http_client.plugins import LoggingPlugin
+
+client = HTTPClient(base_url="...", max_retries=3)
+client.add_plugin(LoggingPlugin(level="DEBUG"))
+
+# ✅ New (v2.0 - Recommended)
+from http_client.core.config import HTTPClientConfig, LoggingConfig, RetryConfig
+
+config = HTTPClientConfig.create(
+    base_url="...",
+    retry=RetryConfig(max_attempts=3),
+    logging=LoggingConfig.create(level="DEBUG")
+)
+client = HTTPClient(config=config)
+```
+
+📖 **Full Migration Guide**: [docs/migration/v1-to-v2.md](docs/migration/v1-to-v2.md)
 
 ## 📝 Configuration Files
 

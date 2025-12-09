@@ -49,7 +49,9 @@ from .plugins.auth_plugin import AuthPlugin
 logging.getLogger('http_client').addHandler(logging.NullHandler())
 
 # Version info
-__version__ = "1.0.0"
+__version__ = "1.5.0"
+__deprecation_version__ = "2.0.0"  # Version when deprecated APIs will be removed
+__migration_guide_url__ = "https://github.com/Git-Dalv/http-client-core/blob/main/docs/migration/v1-to-v2.md"
 __author__ = "HTTP Client Contributors"
 __license__ = "MIT"
 
