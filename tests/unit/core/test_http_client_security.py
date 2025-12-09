@@ -232,3 +232,187 @@ def test_correlation_id_preserved():
     # Should preserve custom ID
     request_headers = responses.calls[0].request.headers
     assert request_headers['X-Correlation-ID'] == custom_id
+
+
+@responses.activate
+def test_decompression_bomb_high_ratio():
+    """Decompression bomb detection: high compression ratio."""
+    import gzip
+    import io
+
+    # Create gzip bomb: 1KB compressed -> 10MB decompressed (ratio 10000:1)
+    # Default max_compression_ratio is 1000:1, so this should be blocked
+    decompressed_data = b"x" * (10 * 1024 * 1024)  # 10MB
+    compressed_buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=compressed_buffer, mode='wb', compresslevel=9) as gz:
+        gz.write(decompressed_data)
+    compressed_data = compressed_buffer.getvalue()
+
+    print(f"Compressed: {len(compressed_data)} bytes, Decompressed: {len(decompressed_data)} bytes")
+    print(f"Ratio: {len(decompressed_data) / len(compressed_data):.1f}:1")
+
+    responses.add(
+        responses.GET,
+        "https://api.example.com/bomb",
+        body=compressed_data,
+        headers={'Content-Encoding': 'gzip'}
+    )
+
+    client = HTTPClient(base_url="https://api.example.com")
+
+    with pytest.raises(DecompressionBombError) as exc_info:
+        client.get("/bomb")
+
+    assert "ratio" in str(exc_info.value).lower()
+    assert "streaming" in str(exc_info.value).lower()
+
+
+@responses.activate
+def test_decompression_bomb_large_size():
+    """Decompression bomb detection: exceeds max decompressed size or ratio."""
+    import gzip
+    import io
+
+    # Create data that exceeds max_decompressed_size (default 500MB)
+    # Use 600MB of zeros (highly compressible)
+    # Note: ratio check may trigger first, which is also valid bomb detection
+    decompressed_data = b"\x00" * (600 * 1024 * 1024)  # 600MB zeros
+    compressed_buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=compressed_buffer, mode='wb', compresslevel=9) as gz:
+        gz.write(decompressed_data)
+    compressed_data = compressed_buffer.getvalue()
+
+    print(f"Large bomb - Compressed: {len(compressed_data)} bytes, Decompressed: {len(decompressed_data)} bytes")
+
+    responses.add(
+        responses.GET,
+        "https://api.example.com/large_bomb",
+        body=compressed_data,
+        headers={'Content-Encoding': 'gzip'}
+    )
+
+    client = HTTPClient(base_url="https://api.example.com")
+
+    with pytest.raises(DecompressionBombError) as exc_info:
+        client.get("/large_bomb")
+
+    # Should detect bomb either by ratio or size check
+    error_msg = str(exc_info.value).lower()
+    assert ("ratio" in error_msg or "decompressed size" in error_msg)
+    assert "exceeds" in error_msg
+
+
+@responses.activate
+def test_decompression_bomb_custom_ratio():
+    """Decompression bomb with custom ratio limit."""
+    import gzip
+    import io
+
+    # Create data with 50:1 ratio
+    decompressed_data = b"x" * (50 * 1024)  # 50KB
+    compressed_buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=compressed_buffer, mode='wb', compresslevel=9) as gz:
+        gz.write(decompressed_data)
+    compressed_data = compressed_buffer.getvalue()
+
+    actual_ratio = len(decompressed_data) / len(compressed_data)
+    print(f"Actual ratio: {actual_ratio:.1f}:1")
+
+    responses.add(
+        responses.GET,
+        "https://api.example.com/data",
+        body=compressed_data,
+        headers={'Content-Encoding': 'gzip'}
+    )
+
+    # Set max ratio to 30:1 (should block 50:1)
+    security_cfg = SecurityConfig(max_compression_ratio=30)
+    config = HTTPClientConfig(
+        base_url="https://api.example.com",
+        security=security_cfg
+    )
+    client = HTTPClient(config=config)
+
+    with pytest.raises(DecompressionBombError) as exc_info:
+        client.get("/data")
+
+    assert "ratio" in str(exc_info.value).lower()
+
+
+@responses.activate
+def test_gzip_valid_data():
+    """Valid gzip data should decompress successfully."""
+    import gzip
+    import io
+
+    # Create valid gzip data with LOW ratio (< 20:1 default)
+    # Use varied data that doesn't compress too well
+    decompressed_data = b"Hello, World! 123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ " * 50  # ~2.7KB
+    compressed_buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=compressed_buffer, mode='wb', compresslevel=1) as gz:  # Low compression
+        gz.write(decompressed_data)
+    compressed_data = compressed_buffer.getvalue()
+
+    print(f"Valid gzip - Compressed: {len(compressed_data)} bytes, Decompressed: {len(decompressed_data)} bytes")
+    print(f"Ratio: {len(decompressed_data) / len(compressed_data):.1f}:1")
+
+    responses.add(
+        responses.GET,
+        "https://api.example.com/valid",
+        body=compressed_data,
+        headers={'Content-Encoding': 'gzip'}
+    )
+
+    # Use higher max_compression_ratio to allow valid data
+    security_cfg = SecurityConfig(max_compression_ratio=100)  # Allow up to 100:1 for valid data
+    config = HTTPClientConfig(
+        base_url="https://api.example.com",
+        security=security_cfg
+    )
+    client = HTTPClient(config=config)
+
+    # Should succeed without raising
+    response = client.get("/valid")
+
+    # Response content should be decompressed
+    assert response.content == decompressed_data
+    assert response.status_code == 200
+
+
+@responses.activate
+def test_decompression_early_abort():
+    """Decompression bomb should abort early during streaming.
+
+    This test verifies that the check happens during streaming,
+    not after full download, preventing OOM attacks.
+    """
+    import gzip
+    import io
+
+    # Create large bomb: many repetitions of same data (highly compressible)
+    # This should be detected early when ratio exceeds limit
+    decompressed_data = b"AAAAAAAAAA" * (2 * 1024 * 1024)  # 20MB of 'A's
+    compressed_buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=compressed_buffer, mode='wb', compresslevel=9) as gz:
+        gz.write(decompressed_data)
+    compressed_data = compressed_buffer.getvalue()
+
+    ratio = len(decompressed_data) / len(compressed_data)
+    print(f"Early abort test - Ratio: {ratio:.1f}:1, Compressed: {len(compressed_data)} bytes")
+
+    responses.add(
+        responses.GET,
+        "https://api.example.com/early_bomb",
+        body=compressed_data,
+        headers={'Content-Encoding': 'gzip'}
+    )
+
+    client = HTTPClient(base_url="https://api.example.com")
+
+    with pytest.raises(DecompressionBombError) as exc_info:
+        client.get("/early_bomb")
+
+    # Should mention streaming in error (indicates early detection)
+    error_msg = str(exc_info.value).lower()
+    assert "streaming" in error_msg or "during" in error_msg
+    assert "ratio" in error_msg
