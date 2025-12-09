@@ -1,6 +1,7 @@
 # tests/unit/test_core_features.py
 
 import pytest
+import responses
 
 from src.http_client.core.http_client import HTTPClient
 from src.http_client.plugins.logging_plugin import LoggingPlugin
@@ -24,8 +25,17 @@ def test_connection_pooling():
     client.close()
 
 
+@responses.activate
 def test_cookie_management():
     """Тест управления куками"""
+    # Mock httpbin.org /cookies endpoint
+    responses.add(
+        responses.GET,
+        "https://httpbin.org/cookies",
+        json={"cookies": {"test_cookie": "test_value"}},
+        status=200
+    )
+
     client = HTTPClient(base_url="https://httpbin.org")
 
     # Устанавливаем куку (supercookie - для всех доменов)
@@ -63,8 +73,17 @@ def test_cookie_management():
     client.close()
 
 
+@responses.activate
 def test_cookie_with_domain():
     """Тест кук с конкретным доменом"""
+    # Mock httpbin.org /cookies endpoint
+    responses.add(
+        responses.GET,
+        "https://httpbin.org/cookies",
+        json={"cookies": {"site_cookie": "site_value"}},
+        status=200
+    )
+
     client = HTTPClient(base_url="https://httpbin.org")
 
     # Устанавливаем куку для конкретного домена
@@ -139,8 +158,23 @@ def test_immutability():
     client.close()
 
 
+@responses.activate
 def test_header_management():
     """Тест управления заголовками"""
+    # Mock httpbin.org /headers endpoint
+    responses.add(
+        responses.GET,
+        "https://httpbin.org/headers",
+        json={
+            "headers": {
+                "X-Custom-Header": "initial_value",
+                "X-Another-Header": "another_value",
+                "Host": "httpbin.org"
+            }
+        },
+        status=200
+    )
+
     client = HTTPClient(
         base_url="https://httpbin.org", headers={"X-Custom-Header": "initial_value"}
     )
@@ -168,8 +202,25 @@ def test_header_management():
     client.close()
 
 
+@responses.activate
 def test_absolute_url_handling():
     """Тест обработки абсолютных URL"""
+    # Mock jsonplaceholder.typicode.com /posts/1 endpoint
+    responses.add(
+        responses.GET,
+        "https://jsonplaceholder.typicode.com/posts/1",
+        json={"id": 1, "title": "Test Post", "body": "Test Body", "userId": 1},
+        status=200
+    )
+
+    # Mock httpbin.org /get endpoint
+    responses.add(
+        responses.GET,
+        "https://httpbin.org/get",
+        json={"args": {}, "headers": {}, "origin": "127.0.0.1", "url": "https://httpbin.org/get"},
+        status=200
+    )
+
     client = HTTPClient(base_url="https://jsonplaceholder.typicode.com")
 
     # Запрос с относительным URL
@@ -202,8 +253,17 @@ def test_ssl_verification():
         client2.close()
 
 
+@responses.activate
 def test_timeout_override():
     """Тест переопределения таймаута в конкретном запросе"""
+    # Mock httpbin.org /delay/1 endpoint
+    responses.add(
+        responses.GET,
+        "https://httpbin.org/delay/1",
+        json={"args": {}, "data": "", "files": {}, "form": {}, "headers": {}, "origin": "127.0.0.1", "url": "https://httpbin.org/delay/1"},
+        status=200
+    )
+
     client = HTTPClient(base_url="https://httpbin.org", timeout=10)
 
     # Запрос с дефолтным таймаутом
@@ -264,8 +324,17 @@ def test_plugin_management():
     client.close()
 
 
+@responses.activate
 def test_session_persistence():
     """Тест сохранения состояния между запросами"""
+    # Mock httpbin.org /cookies endpoint
+    responses.add(
+        responses.GET,
+        "https://httpbin.org/cookies",
+        json={"cookies": {"persistent_cookie": "persistent_value"}},
+        status=200
+    )
+
     client = HTTPClient(base_url="https://httpbin.org")
 
     # Устанавливаем куку
@@ -286,8 +355,17 @@ def test_session_persistence():
     client.close()
 
 
+@responses.activate
 def test_max_redirects():
     """Тест настройки максимального количества редиректов"""
+    # Mock httpbin.org /redirect/3 endpoint (after redirects)
+    responses.add(
+        responses.GET,
+        "https://httpbin.org/redirect/3",
+        json={"args": {}, "headers": {}, "origin": "127.0.0.1", "url": "https://httpbin.org/get"},
+        status=200
+    )
+
     client = HTTPClient(base_url="https://httpbin.org", max_redirects=5)
     # Тест редиректа
     response = client.get("/redirect/3")

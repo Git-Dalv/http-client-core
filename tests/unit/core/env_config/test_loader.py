@@ -70,11 +70,15 @@ class TestLoadFromEnv:
 class TestPrintConfigSummary:
     """Test print_config_summary function."""
 
-    def test_print_without_error(self, capsys):
+    def test_print_without_error(self, caplog):
         """Test that print_config_summary doesn't raise errors."""
+        import logging
+        caplog.set_level(logging.INFO)
+
         config = load_from_env(base_url="https://test.com")
         print_config_summary(config)
 
-        captured = capsys.readouterr()
-        assert "HTTPClientConfig" in captured.out
-        assert "https://test.com" in captured.out
+        # Check that logging output contains expected text
+        log_text = caplog.text
+        assert "HTTPClientConfig" in log_text
+        assert "https://test.com" in log_text

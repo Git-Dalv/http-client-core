@@ -137,7 +137,7 @@ class TestHealthCheckConnectivity:
 
     @responses.activate
     def test_health_check_response_time(self):
-        """Test that response_time_ms is a positive number."""
+        """Test that response_time_ms is a non-negative number."""
         responses.add(
             responses.HEAD,
             "https://api.example.com/health",
@@ -148,8 +148,10 @@ class TestHealthCheckConnectivity:
 
         health = client.health_check(test_url="https://api.example.com/health")
 
-        assert health["connectivity"]["response_time_ms"] > 0
+        # With mocked responses, response time can be very fast (close to 0)
+        assert health["connectivity"]["response_time_ms"] >= 0
         assert isinstance(health["connectivity"]["response_time_ms"], (int, float))
+        assert health["connectivity"]["response_time_ms"] is not None
         client.close()
 
     @responses.activate

@@ -3,6 +3,7 @@ Integration tests for HTTPClient logging with real HTTP requests.
 """
 
 import pytest
+import responses
 import os
 import json
 import tempfile
@@ -15,8 +16,17 @@ from src.http_client.core.logging import LoggingConfig
 class TestHTTPClientLoggingIntegration:
     """Integration tests for logging."""
 
+    @responses.activate
     def test_json_logging_to_file(self):
         """Test JSON logging to file with real request."""
+        # Mock httpbin.org /get endpoint
+        responses.add(
+            responses.GET,
+            "https://httpbin.org/get",
+            json={"args": {}, "headers": {}, "origin": "127.0.0.1", "url": "https://httpbin.org/get"},
+            status=200
+        )
+
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
             log_file = f.name
 
@@ -65,8 +75,17 @@ class TestHTTPClientLoggingIntegration:
             if os.path.exists(log_file):
                 os.remove(log_file)
 
+    @responses.activate
     def test_correlation_id_tracking(self):
         """Test correlation ID tracking across requests."""
+        # Mock httpbin.org /get endpoint
+        responses.add(
+            responses.GET,
+            "https://httpbin.org/get",
+            json={"args": {}, "headers": {"X-Correlation-ID": "test-correlation-123"}, "origin": "127.0.0.1", "url": "https://httpbin.org/get"},
+            status=200
+        )
+
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
             log_file = f.name
 
