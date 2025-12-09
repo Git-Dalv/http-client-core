@@ -4,6 +4,7 @@
 Все конфиги immutable (frozen dataclasses) для потокобезопасности.
 """
 
+import warnings
 from dataclasses import dataclass, field
 from typing import Optional, Tuple, List, Dict, Set, Union, Type, TYPE_CHECKING, Mapping
 from types import MappingProxyType
@@ -164,13 +165,25 @@ class SecurityConfig:
     sensitive_url_params: Set[str] = field(default_factory=set)
 
     def __post_init__(self):
-        """Валидация."""
+        """Валидация и security warnings."""
         if self.max_response_size <= 0:
             raise ValueError("max_response_size must be positive")
         if self.max_decompressed_size <= 0:
             raise ValueError("max_decompressed_size must be positive")
         if self.max_compression_ratio <= 0:
             raise ValueError("max_compression_ratio must be positive")
+
+        # Warn about disabled SSL verification
+        if not self.verify_ssl:
+            from .exceptions import InsecureRequestWarning
+            warnings.warn(
+                "SSL verification is disabled. This exposes your application to "
+                "man-in-the-middle attacks and other security risks. "
+                "Only use verify_ssl=False in development/testing environments. "
+                "NEVER disable SSL verification in production.",
+                InsecureRequestWarning,
+                stacklevel=3
+            )
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # CIRCUIT BREAKER CONFIG

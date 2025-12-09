@@ -336,6 +336,36 @@ class ConfigurationError(HTTPClientException):
     fatal = True
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# WARNINGS
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+class InsecureRequestWarning(UserWarning):
+    """
+    Warning for disabled SSL verification - serious security risk.
+
+    This warning is raised when SSL certificate verification is disabled
+    (verify_ssl=False). Disabling SSL verification exposes your application
+    to man-in-the-middle attacks, where attackers can intercept and modify
+    network traffic.
+
+    Security implications:
+    - Attackers can intercept sensitive data (passwords, tokens, etc.)
+    - No guarantee that you're communicating with the intended server
+    - Data integrity cannot be verified
+
+    Only disable SSL verification in controlled development/testing environments.
+    NEVER disable in production.
+
+    Example:
+        >>> import warnings
+        >>> with warnings.catch_warnings(record=True) as w:
+        ...     config = SecurityConfig(verify_ssl=False)
+        ...     assert len(w) == 1
+        ...     assert issubclass(w[0].category, InsecureRequestWarning)
+    """
+    pass
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # УТИЛИТЫ
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
