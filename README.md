@@ -1,8 +1,8 @@
 # HTTP Client Core
 
 [![Version](https://img.shields.io/badge/version-1.5.0-blue)](https://github.com/Git-Dalv/http-client-core)
-[![Tests](https://img.shields.io/badge/tests-597%20passed-brightgreen)](https://github.com/Git-Dalv/http-client-core)
-[![Coverage](https://img.shields.io/badge/coverage-80%25-green)](https://github.com/Git-Dalv/http-client-core)
+[![Tests](https://img.shields.io/badge/tests-862%20passed-brightgreen)](https://github.com/Git-Dalv/http-client-core)
+[![Coverage](https://img.shields.io/badge/coverage-75%25-green)](https://github.com/Git-Dalv/http-client-core)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
