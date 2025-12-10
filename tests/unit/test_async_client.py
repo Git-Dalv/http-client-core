@@ -1112,8 +1112,271 @@ class TestAsyncHTTPClientEdgeCases:
             assert response.text == "Plain text response"
 
 
+class TestAsyncHTTPClientDownloadMocked:
+    """Test async download method with respx mocks."""
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_basic(self, tmp_path):
+        """Test basic file download with mock."""
+        import os
+
+        test_content = b"test file content" * 100  # 1700 bytes
+        output_file = tmp_path / "test_file.txt"
+
+        # Mock streaming response
+        respx.get("https://api.test.com/file.bin").mock(
+            return_value=httpx.Response(
+                200,
+                content=test_content,
+                headers={"Content-Length": str(len(test_content))}
+            )
+        )
+
+        async with AsyncHTTPClient(base_url="https://api.test.com") as client:
+            bytes_downloaded = await client.download("/file.bin", str(output_file))
+
+            assert bytes_downloaded == len(test_content)
+            assert os.path.exists(output_file)
+
+            with open(output_file, 'rb') as f:
+                assert f.read() == test_content
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_with_progress_callback(self, tmp_path):
+        """Test download with progress callback."""
+        import os
+
+        test_content = b"x" * 2048
+        output_file = tmp_path / "test_file.txt"
+        progress_calls = []
+
+        def on_progress(downloaded, total):
+            progress_calls.append((downloaded, total))
+
+        respx.get("https://api.test.com/file.bin").mock(
+            return_value=httpx.Response(
+                200,
+                content=test_content,
+                headers={"Content-Length": str(len(test_content))}
+            )
+        )
+
+        async with AsyncHTTPClient(base_url="https://api.test.com") as client:
+            bytes_downloaded = await client.download(
+                "/file.bin",
+                str(output_file),
+                progress_callback=on_progress
+            )
+
+            assert bytes_downloaded == len(test_content)
+            # Progress callback should have been called
+            assert len(progress_calls) > 0
+            # Last call should have total bytes downloaded
+            last_downloaded, last_total = progress_calls[-1]
+            assert last_downloaded == len(test_content)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_custom_chunk_size(self, tmp_path):
+        """Test download with custom chunk size."""
+        import os
+
+        test_content = b"y" * 4096
+        output_file = tmp_path / "test_file.txt"
+
+        respx.get("https://api.test.com/large.bin").mock(
+            return_value=httpx.Response(
+                200,
+                content=test_content,
+                headers={"Content-Length": str(len(test_content))}
+            )
+        )
+
+        async with AsyncHTTPClient(base_url="https://api.test.com") as client:
+            bytes_downloaded = await client.download(
+                "/large.bin",
+                str(output_file),
+                chunk_size=512
+            )
+
+            assert bytes_downloaded == len(test_content)
+            assert os.path.exists(output_file)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_size_limit_exceeded_before_download(self, tmp_path):
+        """Test that download fails when Content-Length exceeds limit before starting."""
+        output_file = tmp_path / "test_file.txt"
+
+        # Response with Content-Length that exceeds our limit
+        respx.get("https://api.test.com/huge.bin").mock(
+            return_value=httpx.Response(
+                200,
+                content=b"x" * 100,
+                headers={"Content-Length": "999999999"}  # Very large
+            )
+        )
+
+        config = HTTPClientConfig.create()
+        config = HTTPClientConfig(
+            base_url=config.base_url,
+            headers=config.headers,
+            proxies=config.proxies,
+            timeout=config.timeout,
+            retry=config.retry,
+            pool=config.pool,
+            security=SecurityConfig(max_response_size=1000),
+            circuit_breaker=config.circuit_breaker,
+            logging=config.logging
+        )
+
+        async with AsyncHTTPClient(config=config) as client:
+            with pytest.raises(ResponseTooLargeError) as exc_info:
+                await client.download("https://api.test.com/huge.bin", str(output_file))
+
+            assert exc_info.value.size == 999999999
+            # File should be cleaned up
+            import os
+            assert not os.path.exists(output_file)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_size_limit_exceeded_during_download(self, tmp_path):
+        """Test that download fails when actual size exceeds limit during streaming."""
+        import os
+        output_file = tmp_path / "test_file.txt"
+
+        # Response without Content-Length, but actual content exceeds limit
+        large_content = b"z" * 2000
+        respx.get("https://api.test.com/streaming.bin").mock(
+            return_value=httpx.Response(200, content=large_content)
+        )
+
+        config = HTTPClientConfig.create()
+        config = HTTPClientConfig(
+            base_url=config.base_url,
+            headers=config.headers,
+            proxies=config.proxies,
+            timeout=config.timeout,
+            retry=config.retry,
+            pool=config.pool,
+            security=SecurityConfig(max_response_size=500),  # Will fail during download
+            circuit_breaker=config.circuit_breaker,
+            logging=config.logging
+        )
+
+        async with AsyncHTTPClient(config=config) as client:
+            with pytest.raises(ResponseTooLargeError):
+                await client.download(
+                    "https://api.test.com/streaming.bin",
+                    str(output_file),
+                    chunk_size=256
+                )
+
+            # Partial file should be cleaned up
+            assert not os.path.exists(output_file)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_http_error(self, tmp_path):
+        """Test download handles HTTP errors."""
+        output_file = tmp_path / "test_file.txt"
+
+        respx.get("https://api.test.com/notfound.bin").mock(
+            return_value=httpx.Response(404)
+        )
+
+        async with AsyncHTTPClient(base_url="https://api.test.com") as client:
+            with pytest.raises(httpx.HTTPStatusError):
+                await client.download("/notfound.bin", str(output_file))
+
+            # File should not exist
+            import os
+            assert not os.path.exists(output_file)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_without_content_length(self, tmp_path):
+        """Test download works when Content-Length header is not present."""
+        import os
+
+        test_content = b"content without length header" * 10
+        output_file = tmp_path / "test_file.txt"
+
+        # Response without Content-Length header
+        respx.get("https://api.test.com/nolength.bin").mock(
+            return_value=httpx.Response(200, content=test_content)
+        )
+
+        async with AsyncHTTPClient(base_url="https://api.test.com") as client:
+            bytes_downloaded = await client.download("/nolength.bin", str(output_file))
+
+            assert bytes_downloaded == len(test_content)
+            assert os.path.exists(output_file)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_cleanup_on_error(self, tmp_path):
+        """Test that partial file is cleaned up on any error."""
+        import os
+        output_file = tmp_path / "test_file.txt"
+
+        # Simulate error by using ConnectError
+        respx.get("https://api.test.com/error.bin").mock(
+            side_effect=httpx.ConnectError("Connection failed")
+        )
+
+        async with AsyncHTTPClient(base_url="https://api.test.com") as client:
+            with pytest.raises((ConnectionError, httpx.ConnectError)):
+                await client.download("/error.bin", str(output_file))
+
+            # File should not exist or be cleaned up
+            assert not os.path.exists(output_file)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_returns_bytes_downloaded(self, tmp_path):
+        """Test that download returns correct byte count."""
+        import os
+
+        test_content = b"test" * 128  # 512 bytes
+        output_file = tmp_path / "test_file.txt"
+
+        respx.get("https://api.test.com/counted.bin").mock(
+            return_value=httpx.Response(200, content=test_content)
+        )
+
+        async with AsyncHTTPClient(base_url="https://api.test.com") as client:
+            bytes_downloaded = await client.download("/counted.bin", str(output_file))
+
+            assert isinstance(bytes_downloaded, int)
+            assert bytes_downloaded == len(test_content)
+            assert bytes_downloaded == 512
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_download_empty_file(self, tmp_path):
+        """Test downloading empty file."""
+        import os
+
+        output_file = tmp_path / "empty.txt"
+
+        respx.get("https://api.test.com/empty.bin").mock(
+            return_value=httpx.Response(200, content=b"", headers={"Content-Length": "0"})
+        )
+
+        async with AsyncHTTPClient(base_url="https://api.test.com") as client:
+            bytes_downloaded = await client.download("/empty.bin", str(output_file))
+
+            assert bytes_downloaded == 0
+            assert os.path.exists(output_file)
+            assert os.path.getsize(output_file) == 0
+
+
 class TestAsyncHTTPClientDownload:
-    """Test async download method."""
+    """Test async download method (integration tests with httpbin - kept for backwards compatibility)."""
 
     @pytest.mark.asyncio
     async def test_download_basic(self, tmp_path):
