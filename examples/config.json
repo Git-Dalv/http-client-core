@@ -1,0 +1,49 @@
+{
+  "http_client": {
+    "base_url": "https://api.example.com",
+    "headers": {
+      "User-Agent": "MyApp/1.0",
+      "Accept": "application/json"
+    },
+    "timeout": {
+      "connect": 5,
+      "read": 30,
+      "total": 60
+    },
+    "retry": {
+      "max_attempts": 3,
+      "backoff_base": 0.5,
+      "backoff_factor": 2.0,
+      "backoff_max": 30.0,
+      "backoff_jitter": true,
+      "respect_retry_after": true,
+      "retryable_status_codes": [500, 502, 503, 504, 429]
+    },
+    "security": {
+      "verify_ssl": true,
+      "allow_redirects": true,
+      "max_redirects": 10,
+      "max_response_size": 104857600,
+      "max_decompressed_size": 524288000
+    },
+    "pool": {
+      "pool_connections": 10,
+      "pool_maxsize": 10,
+      "pool_block": false
+    },
+    "circuit_breaker": {
+      "enabled": true,
+      "failure_threshold": 5,
+      "recovery_timeout": 30.0,
+      "half_open_max_calls": 3
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "json",
+      "enable_console": true,
+      "enable_file": false,
+      "enable_correlation_id": true,
+      "mask_sensitive_data": true
+    }
+  }
+}

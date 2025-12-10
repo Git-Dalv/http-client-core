@@ -1,0 +1,31 @@
+# HTTP Client Core - Development Requirements
+# =============================================
+# Install with: pip install -r requirements-dev.txt
+
+# Include base requirements
+-r requirements.txt
+
+# Testing
+pytest>=8.0.0
+pytest-cov>=5.0.0
+pytest-mock>=3.14.0
+pytest-asyncio>=0.23.0
+pytest-timeout>=2.3.0
+responses>=0.25.0
+respx>=0.21.0
+
+# Code quality
+black>=24.0.0
+ruff>=0.4.0
+mypy>=1.10.0
+types-requests>=2.31.0
+
+# Documentation
+# mkdocs>=1.5.0
+# mkdocs-material>=9.0.0
+# mkdocstrings[python]>=0.24.0
+
+# Optional: OpenTelemetry for testing
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-semantic-conventions>=0.41b0

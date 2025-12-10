@@ -1,17 +1,25 @@
-# Core dependencies
+# HTTP Client Core - Requirements
+# ================================
+# Install with: pip install -r requirements.txt
+
+# Core dependencies (required)
 requests>=2.31.0
 urllib3>=2.0.0
-diskcache>=5.6.3
-python-dotenv>=1.0.0
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
 
-# Development dependencies
-pytest>=7.4.0
-pytest-cov>=4.1.0
-pytest-mock>=3.11.0
-black>=23.7.0
-ruff>=0.0.285
-mypy>=1.5.0
-responses>=0.23.0
-types-requests>=2.31.0
+# Optional: Async client
+httpx>=0.27.0
+aiofiles>=23.0.0
+
+# Optional: Disk caching
+diskcache>=5.6.0
+
+# Optional: Progress bars
+tqdm>=4.66.0
+
+# Optional: YAML config
+pyyaml>=6.0
+
+# Optional: SOCKS proxy
+pysocks>=1.7.1

@@ -1,0 +1,74 @@
+# HTTP Client Core - Example Configuration
+# ==========================================
+# Copy this file to config.yaml and customize for your needs.
+# Load with: ConfigFileLoader.from_yaml("config.yaml")
+
+http_client:
+  # Base URL for all requests
+  base_url: "https://api.example.com"
+  
+  # Default headers for all requests
+  headers:
+    User-Agent: "MyApp/1.0"
+    Accept: "application/json"
+    # X-API-Key: "your-api-key"  # Uncomment and set your API key
+  
+  # Timeout configuration
+  timeout:
+    connect: 5      # Connection timeout in seconds
+    read: 30        # Read timeout in seconds
+    total: 60       # Total request timeout (optional)
+  
+  # Retry configuration
+  retry:
+    max_attempts: 3           # Total attempts (1 = no retries)
+    backoff_base: 0.5         # Base delay between retries
+    backoff_factor: 2.0       # Exponential backoff multiplier
+    backoff_max: 30.0         # Maximum delay between retries
+    backoff_jitter: true      # Add randomness to avoid thundering herd
+    respect_retry_after: true # Honor Retry-After header
+    retryable_status_codes:   # HTTP status codes to retry
+      - 500
+      - 502
+      - 503
+      - 504
+      - 429
+  
+  # Security configuration
+  security:
+    verify_ssl: true                    # Verify SSL certificates
+    allow_redirects: true               # Follow HTTP redirects
+    max_redirects: 10                   # Maximum number of redirects
+    max_response_size: 104857600        # 100MB max response size
+    max_decompressed_size: 524288000    # 500MB max decompressed size
+    max_compression_ratio: 100          # Max compression ratio (bomb protection)
+  
+  # Connection pool configuration
+  pool:
+    pool_connections: 10    # Number of connection pools
+    pool_maxsize: 10        # Max connections per pool
+    pool_block: false       # Block when pool is exhausted
+  
+  # Circuit breaker configuration (fault tolerance)
+  circuit_breaker:
+    enabled: true              # Enable circuit breaker
+    failure_threshold: 5       # Failures before opening circuit
+    recovery_timeout: 30.0     # Seconds before trying recovery
+    half_open_max_calls: 3     # Test calls in half-open state
+  
+  # Logging configuration
+  logging:
+    level: "INFO"              # DEBUG, INFO, WARNING, ERROR
+    format: "json"             # "text" or "json"
+    enable_console: true       # Log to console
+    enable_file: false         # Log to file
+    # file_path: "/var/log/http_client.log"
+    # max_bytes: 10485760      # 10MB max file size
+    # backup_count: 5          # Number of backup files
+    enable_correlation_id: true
+    mask_sensitive_data: true  # Mask passwords, tokens, etc.
+
+# Proxy configuration (optional)
+# proxies:
+#   http: "http://proxy.example.com:8080"
+#   https: "http://proxy.example.com:8080"

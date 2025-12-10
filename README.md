@@ -1,47 +1,64 @@
 # HTTP Client Core
 
 [![Version](https://img.shields.io/badge/version-1.5.0-blue)](https://github.com/Git-Dalv/http-client-core)
-[![Tests](https://img.shields.io/badge/tests-415%20passed-brightgreen)](https://github.com/Git-Dalv/http-client-core)
-[![Coverage](https://img.shields.io/badge/coverage-85%25-green)](https://github.com/Git-Dalv/http-client-core)
+[![Tests](https://img.shields.io/badge/tests-597%20passed-brightgreen)](https://github.com/Git-Dalv/http-client-core)
+[![Coverage](https://img.shields.io/badge/coverage-80%25-green)](https://github.com/Git-Dalv/http-client-core)
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Migration Guide](https://img.shields.io/badge/migration-v1%20to%20v2-orange)](docs/migration/v1-to-v2.md)
 
-Production-ready HTTP client library with powerful plugin system, intelligent retry logic, and comprehensive error handling.
+Production-ready HTTP client library with powerful plugin system, intelligent retry logic, circuit breaker pattern, and comprehensive error handling.
 
 ## ✨ Features
 
-- 🔄 **Smart Retry Logic** - Exponential backoff, jitter, Retry-After header support
-- 🧩 **Plugin System** - Modular architecture with 10+ built-in plugins
-- 🛡️ **Type-Safe Config** - Immutable configuration with full type hints
-- 🔒 **Security** - Response size limits, decompression bomb protection
-- 📊 **Monitoring** - Built-in metrics, request tracking, performance stats
-- 🌐 **Proxy Support** - Proxy rotation with health tracking
-- 🎭 **Browser Fingerprinting** - Realistic browser headers (Chrome, Firefox, Safari)
-- ⚡ **Connection Pooling** - Efficient HTTP connection management
-- 📥 **Stream Downloads** - Memory-efficient large file downloads
-- 🔍 **Correlation ID** - Request tracing across distributed systems
+| Feature | Description |
+|---------|-------------|
+| 🔄 **Smart Retry** | Exponential backoff with jitter, Retry-After header support |
+| 🛡️ **Circuit Breaker** | Fault tolerance with automatic recovery |
+| 🧩 **Plugin System** | 15+ built-in plugins, easy to extend |
+| ⚡ **Async Support** | Full async/await API with httpx |
+| 🔒 **Security** | Response size limits, decompression bomb protection, SSL verification |
+| 📊 **Monitoring** | Built-in metrics, health checks, request tracing |
+| 🌐 **Proxy Support** | Proxy rotation with health tracking |
+| 🎭 **Browser Fingerprinting** | Realistic browser headers (Chrome, Firefox, Safari, Edge) |
+| 📥 **Stream Downloads** | Memory-efficient large file downloads |
+| 🔍 **Correlation ID** | Request tracing across distributed systems |
+| ⚙️ **Hot Reload Config** | YAML/JSON config with file watching |
+| 📡 **OpenTelemetry** | Distributed tracing and metrics |
 
 ## 📦 Installation
 
 ```bash
 pip install http-client-core
+```
 
-# With optional dependencies
-pip install http-client-core[progress]    # Progress bars for downloads
-pip install http-client-core[async]       # Async client (httpx)
-pip install http-client-core[cache]       # Disk caching
-pip install http-client-core[otel]        # OpenTelemetry tracing & metrics
-pip install http-client-core[yaml]        # YAML config file support
+### Optional Dependencies
 
-# With all optional dependencies
+```bash
+# Async client (httpx)
+pip install http-client-core[async]
+
+# Progress bars for downloads
+pip install http-client-core[progress]
+
+# Disk caching
+pip install http-client-core[cache]
+
+# OpenTelemetry tracing & metrics
+pip install http-client-core[otel]
+
+# YAML config file support
+pip install http-client-core[yaml]
+
+# All optional dependencies
 pip install http-client-core[all]
 ```
 
 ## 🚀 Quick Start
 
+### Basic Usage
+
 ```python
-from src.http_client import HTTPClient
+from http_client import HTTPClient
 
 # Simple GET request
 client = HTTPClient(base_url="https://api.example.com")
@@ -50,391 +67,274 @@ print(response.json())
 
 # POST with JSON
 response = client.post("/users", json={"name": "John", "email": "john@example.com"})
-```
 
-## ⚠️ Deprecation Notices
-
-**Important for existing users**: Some APIs are deprecated and will be removed in v2.0.0.
-
-### Deprecated Features
-
-- **LoggingPlugin** ➜ Use `HTTPClientConfig.logging` instead
-- **Constructor parameters** ➜ Use structured config objects:
-  - `max_retries` ➜ `config.retry.max_attempts`
-  - `pool_connections` ➜ `config.pool.pool_connections`
-  - `pool_maxsize` ➜ `config.pool.pool_maxsize`
-  - `max_redirects` ➜ `config.pool.max_redirects`
-  - `verify_ssl` ➜ `config.security.verify_ssl`
-
-### Migration Timeline
-
-- **v1.5.0** (Current): Deprecation warnings added
-- **v1.9.0**: Warnings become errors in strict mode
-- **v2.0.0**: Deprecated APIs removed
-
-### Migration Tools
-
-**Check your code for deprecated usage:**
-
-```bash
-# Check single file
-python -m http_client.tools.migration_check your_code.py
-
-# Check entire project
-python -m http_client.tools.migration_check src/ --recursive
-
-# Test with strict mode (converts warnings to errors)
-HTTP_CLIENT_STRICT_DEPRECATION=1 python -m pytest tests/
-```
-
-**Example migration:**
-
-```python
-# ❌ Old (v1.x - Deprecated)
-from http_client.plugins import LoggingPlugin
-
-client = HTTPClient(base_url="...", max_retries=3)
-client.add_plugin(LoggingPlugin(level="DEBUG"))
-
-# ✅ New (v2.0 - Recommended)
-from http_client.core.config import HTTPClientConfig, LoggingConfig, RetryConfig
-
-config = HTTPClientConfig.create(
-    base_url="...",
-    retry=RetryConfig(max_attempts=3),
-    logging=LoggingConfig.create(level="DEBUG")
-)
-client = HTTPClient(config=config)
-```
-
-📖 **Full Migration Guide**: [docs/migration/v1-to-v2.md](docs/migration/v1-to-v2.md)
-
-## 📝 Configuration Files
-
-Load configuration from YAML or JSON files for easier management and deployment:
-
-### YAML Configuration
-
-```bash
-# Install YAML support
-pip install http-client-core[yaml]
-```
-
-```python
-from http_client import HTTPClient
-from http_client.core.env_config import ConfigFileLoader
-
-# Load from YAML file
-config = ConfigFileLoader.from_yaml("config.yaml")
-client = HTTPClient(config=config)
-
-# Or auto-detect format by extension
-config = ConfigFileLoader.from_file("config.yaml")
-client = HTTPClient(config=config)
-
-# Or use environment variable
-# export HTTP_CLIENT_CONFIG_FILE=/path/to/config.yaml
-config = ConfigFileLoader.from_env_path()
-if config:
-    client = HTTPClient(config=config)
-```
-
-**Example config.yaml:**
-
-```yaml
-http_client:
-  base_url: "https://api.example.com"
-
-  headers:
-    Authorization: "Bearer YOUR_TOKEN_HERE"
-    User-Agent: "MyApp/1.0"
-
-  timeout:
-    connect: 5
-    read: 30
-    total: 60
-
-  retry:
-    max_attempts: 3
-    backoff_factor: 2.0
-    backoff_jitter: true
-
-  security:
-    verify_ssl: true
-    max_response_size: 104857600  # 100MB
-```
-
-### JSON Configuration
-
-```python
-from http_client.core.env_config import ConfigFileLoader
-
-# Load from JSON file
-config = ConfigFileLoader.from_json("config.json")
-client = HTTPClient(config=config)
-```
-
-**Example config.json:**
-
-```json
-{
-  "http_client": {
-    "base_url": "https://api.example.com",
-    "headers": {
-      "Authorization": "Bearer YOUR_TOKEN_HERE"
-    },
-    "timeout": {
-      "connect": 5,
-      "read": 30
-    },
-    "retry": {
-      "max_attempts": 3
-    }
-  }
-}
-```
-
-### Configuration Examples
-
-See complete configuration examples in [docs/examples/](docs/examples/):
-- [config.yaml](docs/examples/config.yaml) - Full example with all options
-- [config-minimal.yaml](docs/examples/config-minimal.yaml) - Minimal configuration
-- [config-production.yaml](docs/examples/config-production.yaml) - Production-ready setup
-- [config-kubernetes.yaml](docs/examples/config-kubernetes.yaml) - Kubernetes ConfigMap
-
-### Environment Variable
-
-Set `HTTP_CLIENT_CONFIG_FILE` to automatically load configuration:
-
-```bash
-export HTTP_CLIENT_CONFIG_FILE=/etc/myapp/http-client.yaml
-```
-
-```python
-from http_client import HTTPClient
-from http_client.core.env_config import ConfigFileLoader
-
-# Automatically loads from HTTP_CLIENT_CONFIG_FILE
-config = ConfigFileLoader.from_env_path()
-client = HTTPClient(config=config)
-```
-
-## 🔄 Hot Reload Configuration
-
-For long-running processes (workers, scrapers, API clients), automatically reload configuration when the config file changes without restarting the application:
-
-### Automatic Hot Reload
-
-```python
-from http_client import ReloadableHTTPClient
-
-# Client automatically reloads config every 10 seconds
-client = ReloadableHTTPClient("config.yaml", check_interval=10.0)
-
-# Always uses the latest configuration
-response = client.get("/api/data")
-
-# Config file is modified externally...
-# Next request automatically uses updated config
-response = client.get("/api/data")
-
-# Don't forget to close when done
+# Always close or use context manager
 client.close()
 ```
 
-### Context Manager Support
-
-```python
-from http_client import ReloadableHTTPClient
-import time
-
-# Automatically stops watcher on exit
-with ReloadableHTTPClient("config.yaml", check_interval=5.0) as client:
-    while running:
-        response = client.get("/health")
-        time.sleep(60)
-```
-
-### Manual Control with ConfigWatcher
-
-For more control over the reload process:
+### Context Manager (Recommended)
 
 ```python
 from http_client import HTTPClient
-from http_client.core.env_config import ConfigWatcher
 
-def on_config_reload(new_config):
-    """Called when config is successfully reloaded."""
-    print(f"Config reloaded! New timeout: {new_config.timeout}")
-    # Alert monitoring system, update metrics, etc.
+with HTTPClient(base_url="https://api.example.com") as client:
+    response = client.get("/users")
+    data = response.json()
+# Automatically closed
+```
 
-def on_reload_error(error):
-    """Called when config reload fails."""
-    print(f"Config reload failed: {error}")
-    # Alert ops team, log to monitoring, etc.
+### Async Client
 
-# Create watcher with callbacks
-watcher = ConfigWatcher(
-    "config.yaml",
-    check_interval=5.0,
-    on_reload=on_config_reload,
-    on_error=on_reload_error
+```python
+from http_client import AsyncHTTPClient
+import asyncio
+
+async def main():
+    async with AsyncHTTPClient(base_url="https://api.example.com") as client:
+        response = await client.get("/users")
+        data = response.json()
+        
+        # Concurrent requests
+        responses = await asyncio.gather(
+            client.get("/users/1"),
+            client.get("/users/2"),
+            client.get("/users/3"),
+        )
+
+asyncio.run(main())
+```
+
+## ⚙️ Configuration
+
+### Using HTTPClientConfig (Recommended)
+
+```python
+from http_client import (
+    HTTPClient,
+    HTTPClientConfig,
+    TimeoutConfig,
+    RetryConfig,
+    SecurityConfig,
+    CircuitBreakerConfig,
 )
-
-# Start monitoring in background thread
-watcher.start()
-
-# Create client with current config
-client = HTTPClient(config=watcher.current_config)
-
-# ... application logic ...
-
-# Later, recreate client with updated config
-client = HTTPClient(config=watcher.current_config)
-
-# Or force immediate reload
-if watcher.reload_now():
-    print("Config reloaded successfully")
-    client = HTTPClient(config=watcher.current_config)
-
-# Stop monitoring when done
-watcher.stop()
-```
-
-### Real-World Example: Long-Running Worker
-
-```python
-from http_client import ReloadableHTTPClient
-import time
-import logging
-
-logger = logging.getLogger(__name__)
-
-def process_queue():
-    """Worker that processes queue items with hot-reloadable config."""
-    # Config reloads automatically every 30 seconds
-    with ReloadableHTTPClient("config.yaml", check_interval=30.0) as client:
-        logger.info("Worker started with hot reload enabled")
-
-        while True:
-            try:
-                # Get work item
-                item = queue.get()
-
-                # Process with current config (auto-updates!)
-                response = client.post("/api/process", json=item)
-
-                if response.status_code == 200:
-                    logger.info(f"Processed item {item['id']}")
-                else:
-                    logger.error(f"Failed to process item {item['id']}")
-
-            except KeyboardInterrupt:
-                logger.info("Worker shutting down")
-                break
-            except Exception as e:
-                logger.error(f"Error processing item: {e}")
-                time.sleep(5)  # Back off on errors
-
-# Watcher automatically stops when exiting context manager
-```
-
-**What gets updated automatically:**
-- Timeouts (connect, read, total)
-- Retry settings (attempts, backoff, jitter)
-- Headers and authentication
-- Logging level and format
-- Circuit breaker parameters
-
-**What requires client recreation (handled automatically):**
-- Base URL changes
-- Connection pool settings
-- SSL verification settings
-
-**Features:**
-- ✅ Thread-safe configuration access
-- ✅ Graceful error handling (keeps old config on parse errors)
-- ✅ Callbacks for reload success and errors
-- ✅ Works with YAML and JSON configs
-- ✅ No external dependencies (uses stdlib only)
-
-## 🎯 Basic Examples
-
-### With Automatic Retry
-
-```python
-from src.http_client import HTTPClient
-
-# Automatic retry on 5xx errors and timeouts
-client = HTTPClient(
-    base_url="https://api.example.com",
-    max_retries=3,  # Retry up to 3 times
-    timeout=30       # 30 second timeout
-)
-
-response = client.get("/data")
-# Will automatically retry on: 500, 502, 503, 504, timeouts
-```
-
-### Advanced Configuration
-
-```python
-from src.http_client import HTTPClientConfig, TimeoutConfig, RetryConfig
 
 config = HTTPClientConfig(
     base_url="https://api.example.com",
+    headers={"X-API-Key": "secret"},
     timeout=TimeoutConfig(
-        connect=5,   # 5 seconds to connect
-        read=30      # 30 seconds to read response
+        connect=5,    # 5 seconds to connect
+        read=30,      # 30 seconds to read response
+        total=60,     # 60 seconds total
     ),
     retry=RetryConfig(
         max_attempts=5,
         backoff_base=0.5,
         backoff_factor=2.0,
         backoff_jitter=True,
-        respect_retry_after=True
-    )
+        backoff_max=30.0,
+        respect_retry_after=True,
+        retryable_status_codes={500, 502, 503, 504, 429},
+    ),
+    security=SecurityConfig(
+        verify_ssl=True,
+        max_response_size=100 * 1024 * 1024,  # 100MB
+        max_decompressed_size=500 * 1024 * 1024,  # 500MB
+    ),
+    circuit_breaker=CircuitBreakerConfig(
+        enabled=True,
+        failure_threshold=5,
+        recovery_timeout=30.0,
+        half_open_max_calls=3,
+    ),
 )
 
 client = HTTPClient(config=config)
 ```
 
-### Download Large Files
+### Quick Factory Method
 
 ```python
-# Stream download to avoid memory issues
-client = HTTPClient(base_url="https://example.com")
+from http_client import HTTPClientConfig
 
-bytes_downloaded = client.download(
-    "/large-file.zip",
-    "output.zip",
-    chunk_size=8192,
-    show_progress=True  # Requires tqdm
+config = HTTPClientConfig.create(
+    base_url="https://api.example.com",
+    timeout=30,
+    max_retries=5,
+    verify_ssl=True,
 )
+```
 
-print(f"Downloaded {bytes_downloaded} bytes")
+### YAML Configuration
+
+```yaml
+# config.yaml
+http_client:
+  base_url: "https://api.example.com"
+  timeout:
+    connect: 5
+    read: 30
+  retry:
+    max_attempts: 5
+    backoff_factor: 2.0
+  security:
+    verify_ssl: true
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+```
+
+```python
+from http_client.core.env_config import ConfigFileLoader
+
+config = ConfigFileLoader.from_yaml("config.yaml")
+client = HTTPClient(config=config)
+```
+
+### Environment Variables
+
+```bash
+export HTTP_CLIENT_BASE_URL="https://api.example.com"
+export HTTP_CLIENT_TIMEOUT_CONNECT=5
+export HTTP_CLIENT_TIMEOUT_READ=30
+export HTTP_CLIENT_RETRY_MAX_ATTEMPTS=5
+export HTTP_CLIENT_SECURITY_VERIFY_SSL=true
+```
+
+```python
+from http_client.core.env_config import EnvConfigLoader
+
+config = EnvConfigLoader.load()
+client = HTTPClient(config=config)
 ```
 
 ## 🧩 Plugins
 
-### Logging Plugin
+### Built-in Plugins
+
+| Plugin | Priority | Description |
+|--------|----------|-------------|
+| `BrowserFingerprintPlugin` | 0 (FIRST) | Realistic browser headers |
+| `OpenTelemetryPlugin` | 0 (FIRST) | Distributed tracing |
+| `AuthPlugin` | 10 (EARLY) | Authentication (Bearer, Basic, API Key) |
+| `CachePlugin` | 10 (EARLY) | In-memory response caching |
+| `DiskCachePlugin` | 10 (EARLY) | Persistent disk caching |
+| `RateLimitPlugin` | 25 (HIGH) | Request rate limiting |
+| `RetryPlugin` | 50 (NORMAL) | Custom retry logic |
+| `LoggingPlugin` | 75 (LOW) | Request/response logging |
+| `MonitoringPlugin` | 100 (LAST) | Metrics collection |
+
+### Using Plugins
 
 ```python
-from src.http_client import HTTPClient, LoggingPlugin
+from http_client import (
+    HTTPClient,
+    LoggingPlugin,
+    MonitoringPlugin,
+    CachePlugin,
+    RateLimitPlugin,
+    AuthPlugin,
+)
+from http_client.plugins import BrowserFingerprintPlugin
 
 client = HTTPClient(base_url="https://api.example.com")
-client.add_plugin(LoggingPlugin())
 
-# All requests will be logged
+# Add plugins - they execute in priority order
+client.add_plugin(BrowserFingerprintPlugin(browser="chrome"))
+client.add_plugin(AuthPlugin(auth_type="bearer", token="your-token"))
+client.add_plugin(CachePlugin(ttl=300, max_size=1000))
+client.add_plugin(RateLimitPlugin(max_requests=100, time_window=60))
+client.add_plugin(LoggingPlugin())
+client.add_plugin(MonitoringPlugin())
+
 response = client.get("/data")
-# [INFO] Sending GET request to https://api.example.com/data
-# [INFO] Response 200 from https://api.example.com/data (took 0.5s)
+```
+
+### Authentication Plugin
+
+```python
+from http_client import HTTPClient, AuthPlugin
+
+# Bearer token
+auth = AuthPlugin(auth_type="bearer", token="your-api-token")
+
+# Basic auth
+auth = AuthPlugin(auth_type="basic", username="user", password="pass")
+
+# API Key (header)
+auth = AuthPlugin(auth_type="api_key", api_key="key", api_key_header="X-API-Key")
+
+client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(auth)
+```
+
+### Caching Plugin
+
+```python
+from http_client import HTTPClient, CachePlugin
+
+# In-memory cache with LRU eviction
+cache = CachePlugin(
+    ttl=300,       # Cache for 5 minutes
+    max_size=1000  # Max 1000 entries
+)
+
+client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(cache)
+
+# First request hits API
+response1 = client.get("/users")
+
+# Second request served from cache
+response2 = client.get("/users")
+
+# Check cache stats
+print(f"Cache size: {cache.size}/{cache.max_size}")
+print(f"Hit rate: {cache.hits / (cache.hits + cache.misses) * 100:.1f}%")
+```
+
+### Rate Limiting Plugin
+
+```python
+from http_client import HTTPClient, RateLimitPlugin
+
+# 100 requests per 60 seconds
+rate_limiter = RateLimitPlugin(max_requests=100, time_window=60)
+
+client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(rate_limiter)
+
+# Requests automatically throttled when limit reached
+for i in range(200):
+    response = client.get(f"/data/{i}")
+```
+
+### Browser Fingerprint Plugin
+
+```python
+from http_client import HTTPClient
+from http_client.plugins import BrowserFingerprintPlugin
+
+# Imitate Chrome browser
+plugin = BrowserFingerprintPlugin(browser="chrome")
+
+# Or Firefox, Safari, Edge, chrome_mobile
+plugin = BrowserFingerprintPlugin(browser="firefox")
+
+# Random browser for each request (anti-bot evasion)
+plugin = BrowserFingerprintPlugin(random_profile=True)
+
+client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(plugin)
+
+# Available browsers
+print(BrowserFingerprintPlugin.get_available_browsers())
+# ['chrome', 'firefox', 'safari', 'edge', 'chrome_mobile']
 ```
 
 ### Monitoring Plugin
 
 ```python
-from src.http_client import HTTPClient, MonitoringPlugin
+from http_client import HTTPClient, MonitoringPlugin
 
 monitoring = MonitoringPlugin()
 client = HTTPClient(base_url="https://api.example.com")
@@ -447,91 +347,97 @@ for i in range(10):
 # Get metrics
 metrics = monitoring.get_metrics()
 print(f"Total requests: {metrics['total_requests']}")
-print(f"Success rate: {metrics['success_rate']}")
-print(f"Avg response time: {metrics.get('avg_response_time', 0):.2f}s")
+print(f"Success rate: {metrics['success_rate']:.1%}")
+print(f"Avg response time: {metrics['avg_response_time']:.2f}s")
+print(f"Requests by status: {metrics['status_codes']}")
 ```
 
-### Rate Limiting
+## 🛡️ Circuit Breaker
+
+Protect your application from cascading failures:
 
 ```python
-from src.http_client import HTTPClient, RateLimitPlugin
+from http_client import HTTPClient, HTTPClientConfig, CircuitBreakerConfig
 
-# Limit to 5 requests per second
-rate_limiter = RateLimitPlugin(max_requests_per_second=5)
-client = HTTPClient(base_url="https://api.example.com")
-client.add_plugin(rate_limiter)
+config = HTTPClientConfig(
+    base_url="https://api.example.com",
+    circuit_breaker=CircuitBreakerConfig(
+        enabled=True,
+        failure_threshold=5,    # Open after 5 failures
+        recovery_timeout=30.0,  # Try recovery after 30s
+        half_open_max_calls=3,  # Allow 3 test requests
+    ),
+)
 
-# These requests will be automatically rate-limited
-for i in range(20):
-    response = client.get(f"/data/{i}")
+client = HTTPClient(config=config)
+
+# Circuit states: CLOSED -> OPEN -> HALF_OPEN -> CLOSED
+# When OPEN, requests fail immediately with CircuitOpenError
 ```
 
-### Authentication
+## 📥 File Downloads
+
+### Basic Download
 
 ```python
-from src.http_client import HTTPClient, AuthPlugin
+from http_client import HTTPClient
 
-# Bearer token authentication
-auth = AuthPlugin(auth_type="bearer", token="your-api-token")
-client = HTTPClient(base_url="https://api.example.com")
-client.add_plugin(auth)
+client = HTTPClient(base_url="https://example.com")
 
-# All requests will include: Authorization: Bearer your-api-token
-response = client.get("/protected-resource")
+# Stream download (memory-efficient)
+bytes_downloaded = client.download(
+    "/large-file.zip",
+    "output.zip",
+    chunk_size=8192,
+)
+print(f"Downloaded {bytes_downloaded} bytes")
 ```
 
-## 📚 More Examples
-
-### Response Caching
+### Download with Progress
 
 ```python
-from src.http_client import HTTPClient, CachePlugin
+from http_client import HTTPClient
 
-cache = CachePlugin(ttl=300)  # Cache for 5 minutes
-client = HTTPClient(base_url="https://api.example.com")
-client.add_plugin(cache)
+def on_progress(downloaded, total):
+    if total > 0:
+        percent = (downloaded / total) * 100
+        print(f"\rProgress: {percent:.1f}%", end="")
 
-# First request hits the API
-response1 = client.get("/data")
-
-# Second request uses cache (much faster!)
-response2 = client.get("/data")
+client = HTTPClient(base_url="https://example.com")
+client.download(
+    "/large-file.zip",
+    "output.zip",
+    progress_callback=on_progress,
+)
 ```
 
-### Using Multiple Plugins
+### Async Download
 
 ```python
-from src.http_client import HTTPClient, LoggingPlugin, MonitoringPlugin, RateLimitPlugin
+from http_client import AsyncHTTPClient
 
-client = HTTPClient(base_url="https://api.example.com")
-client.add_plugin(LoggingPlugin())
-client.add_plugin(MonitoringPlugin())
-client.add_plugin(RateLimitPlugin(max_requests_per_second=10))
-
-# All plugins work together
-for i in range(50):
-    response = client.get(f"/data/{i}")
+async with AsyncHTTPClient() as client:
+    bytes_downloaded = await client.download(
+        "https://example.com/file.zip",
+        "output.zip",
+        chunk_size=8192,
+    )
 ```
 
-## 🔍 Monitoring & Health Checks
-
-### Health Check
-
-The `health_check()` method provides comprehensive diagnostics for monitoring systems, health endpoints, and debugging:
+## 🔍 Health Checks
 
 ```python
-from src.http_client import HTTPClient
+from http_client import HTTPClient
 
 client = HTTPClient(base_url="https://api.example.com")
 
-# Basic health check (no network request)
+# Basic health check
 health = client.health_check()
 print(f"Healthy: {health['healthy']}")
 print(f"Active sessions: {health['active_sessions']}")
 print(f"Plugins: {health['plugins']}")
-print(f"Config: {health['config']}")
 
-# Health check with connectivity test
+# With connectivity test
 health = client.health_check(test_url="https://api.example.com/health")
 if health['connectivity']['reachable']:
     print(f"✅ API reachable in {health['connectivity']['response_time_ms']}ms")
@@ -539,352 +445,221 @@ else:
     print(f"❌ API unreachable: {health['connectivity']['error']}")
 ```
 
-**Use cases:**
-- Kubernetes liveness/readiness probes
-- Prometheus metrics endpoints
-- Pre-deployment connectivity checks
-- Debugging connection issues
-
-### Cache Statistics
-
-Monitor cache performance with built-in metrics:
-
-```python
-from src.http_client import HTTPClient, CachePlugin
-
-# Create cache with size limit
-cache = CachePlugin(ttl=300, max_size=100)
-
-client = HTTPClient(base_url="https://api.example.com")
-client.add_plugin(cache)
-
-# Make requests
-client.get("/users")
-client.get("/users")  # Cache hit
-
-# Check statistics
-print(f"Cache size: {cache.size}/{cache.max_size}")
-print(f"Hit rate: {cache.hits / (cache.hits + cache.misses) * 100:.1f}%")
-print(f"Cache hits: {cache.hits}")
-print(f"Cache misses: {cache.misses}")
-```
-
-**Features:**
-- Automatic eviction with LRU strategy
-- Thread-safe hit/miss tracking
-- Configurable max_size to prevent memory leaks
-
 ## 📡 OpenTelemetry Integration
-
-Add distributed tracing and metrics using OpenTelemetry (industry standard for observability):
-
-### Installation
-
-```bash
-pip install http-client-core[otel]
-```
-
-### Distributed Tracing
-
-Track HTTP requests across your distributed system with OpenTelemetry tracing:
 
 ```python
 from http_client import HTTPClient
-from http_client.contrib.opentelemetry import OpenTelemetryPlugin
+from http_client.contrib.opentelemetry import OpenTelemetryPlugin, OpenTelemetryMetrics
 
+# Setup OpenTelemetry (see opentelemetry-python docs)
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
 
-# Setup OpenTelemetry tracer
-provider = TracerProvider()
-provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
-trace.set_tracer_provider(provider)
-
-# Add OpenTelemetry plugin
-client = HTTPClient(base_url="https://api.example.com")
-client.add_plugin(OpenTelemetryPlugin())
-
-# All requests are now traced automatically
-response = client.get("/users")
-```
-
-**Features:**
-- Automatic span creation for each HTTP request
-- W3C Trace Context propagation in headers
-- Follows OpenTelemetry Semantic Conventions
-- Captures request/response metadata
-- Records exceptions and errors
-- Filters sensitive headers (Authorization, Cookie, etc.)
-
-### Metrics Collection
-
-Collect HTTP client metrics using OpenTelemetry:
-
-```python
-from http_client import HTTPClient
-from http_client.contrib.opentelemetry import OpenTelemetryMetrics
-
-from opentelemetry import metrics
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import (
-    ConsoleMetricExporter,
-    PeriodicExportingMetricReader,
+trace.set_tracer_provider(TracerProvider())
+trace.get_tracer_provider().add_span_processor(
+    SimpleSpanProcessor(ConsoleSpanExporter())
 )
 
-# Setup OpenTelemetry metrics
-reader = PeriodicExportingMetricReader(ConsoleMetricExporter())
-provider = MeterProvider(metric_readers=[reader])
-metrics.set_meter_provider(provider)
-
-# Add metrics plugin
+# Add tracing to HTTP client
 client = HTTPClient(base_url="https://api.example.com")
+client.add_plugin(OpenTelemetryPlugin())
 client.add_plugin(OpenTelemetryMetrics())
 
-# Metrics collected automatically:
-# - http_client_requests_total (counter)
-# - http_client_request_duration_seconds (histogram)
-# - http_client_active_requests (gauge)
+# Requests are now traced
 response = client.get("/users")
 ```
 
-### Integration with Jaeger
-
-Export traces to Jaeger for visualization:
+## 🌐 Proxy Support
 
 ```python
-from http_client import HTTPClient
-from http_client.contrib.opentelemetry import OpenTelemetryPlugin
+from http_client import HTTPClient, HTTPClientConfig
+from http_client.utils.proxy_manager import ProxyPool
 
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-
-# Setup Jaeger exporter
-jaeger_exporter = JaegerExporter(
-    agent_host_name="localhost",
-    agent_port=6831,
-)
-
-provider = TracerProvider()
-provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
-trace.set_tracer_provider(provider)
-
-# Use plugin
-client = HTTPClient(base_url="https://api.example.com")
-client.add_plugin(OpenTelemetryPlugin())
-
-# Traces exported to Jaeger automatically
-response = client.get("/users")
-```
-
-### Advanced Configuration
-
-Customize OpenTelemetry behavior:
-
-```python
-from http_client.contrib.opentelemetry import OpenTelemetryPlugin
-
-plugin = OpenTelemetryPlugin(
-    tracer_name="my_service",
-    record_request_body=True,   # Include request body in spans
-    record_response_body=True,  # Include response body in spans
-    excluded_urls=["health", "metrics"],  # Don't trace these URLs
-    capture_headers=True,        # Capture HTTP headers (sensitive ones filtered)
-    max_header_length=256,       # Truncate long header values
-)
-
-client.add_plugin(plugin)
-```
-
-**Use Cases:**
-- Distributed tracing in microservices
-- Performance monitoring and bottleneck identification
-- Error tracking and debugging
-- SLO/SLA monitoring
-- Integration with Jaeger, Zipkin, Prometheus, Grafana
-
-## 🔧 Configuration
-
-### Timeout Configuration
-
-```python
-from src.http_client import HTTPClientConfig, TimeoutConfig
-
+# Simple proxy
 config = HTTPClientConfig(
     base_url="https://api.example.com",
-    timeout=TimeoutConfig(
-        connect=5,   # Connection timeout
-        read=30,     # Read timeout
-        total=None   # Total timeout (optional)
-    )
+    proxies={
+        "http://": "http://proxy.example.com:8080",
+        "https://": "http://proxy.example.com:8080",
+    },
 )
+client = HTTPClient(config=config)
+
+# Proxy pool with rotation
+pool = ProxyPool()
+pool.add_proxy("proxy1.example.com", 8080)
+pool.add_proxy("proxy2.example.com", 8080)
+pool.add_proxy("proxy3.example.com", 8080)
+
+# Get best proxy (round-robin with health tracking)
+proxy = pool.get_proxy()
 ```
 
-### Retry Configuration
+## ⚠️ Exception Handling
 
 ```python
-from src.http_client import RetryConfig
-
-retry = RetryConfig(
-    max_attempts=3,
-    backoff_base=0.5,           # Initial backoff: 0.5s
-    backoff_factor=2.0,          # Exponential: 0.5s, 1s, 2s, 4s...
-    backoff_max=60.0,            # Max backoff: 60s
-    backoff_jitter=True,         # Add randomness (±50%)
-    respect_retry_after=True,    # Respect Retry-After header
-    retry_after_max=300,         # Max Retry-After: 5 minutes
-    
-    # Which methods to retry (only idempotent by default)
-    idempotent_methods={'GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS', 'TRACE'},
-    
-    # Which status codes to retry
-    retryable_status_codes={408, 429, 500, 502, 503, 504}
-)
-```
-
-### Security Configuration
-
-```python
-from src.http_client import SecurityConfig
-
-security = SecurityConfig(
-    max_response_size=100 * 1024 * 1024,      # 100MB
-    max_decompressed_size=500 * 1024 * 1024,  # 500MB
-    verify_ssl=True,
-    allow_redirects=True
-)
-```
-
-### Connection Pool Configuration
-
-```python
-from src.http_client import ConnectionPoolConfig
-
-pool = ConnectionPoolConfig(
-    pool_connections=10,   # Number of connection pools
-    pool_maxsize=10,       # Max connections per pool
-    pool_block=False,      # Don't block when pool is full
-    max_redirects=30       # Max redirects to follow
-)
-```
-
-## 🎭 Available Plugins
-
-| Plugin | Description |
-|--------|-------------|
-| **LoggingPlugin** | Log all requests and responses |
-| **MonitoringPlugin** | Track metrics and performance |
-| **RetryPlugin** | Custom retry logic (legacy) |
-| **CachePlugin** | In-memory response caching |
-| **RateLimitPlugin** | Limit requests per second |
-| **AuthPlugin** | Bearer token / API key auth |
-
-## 🔄 Exception Handling
-
-```python
-from src.http_client import HTTPClient
-from src.http_client import (
-    HTTPError,
-    NotFoundError,
-    ServerError,
+from http_client import (
+    HTTPClient,
+    HTTPClientException,
     TimeoutError,
-    TooManyRetriesError
+    ConnectionError,
+    ServerError,
+    NotFoundError,
+    BadRequestError,
+    UnauthorizedError,
+    ForbiddenError,
+    TooManyRetriesError,
+    CircuitOpenError,
+    ResponseTooLargeError,
 )
 
 client = HTTPClient(base_url="https://api.example.com")
 
 try:
-    response = client.get("/data")
-except NotFoundError as e:
-    print(f"Resource not found: {e}")
-except ServerError as e:
-    print(f"Server error (will be retried automatically): {e}")
+    response = client.get("/resource")
 except TimeoutError as e:
-    print(f"Request timeout: {e}")
+    print(f"Request timed out: {e}")
+except ConnectionError as e:
+    print(f"Connection failed: {e}")
+except NotFoundError as e:
+    print(f"Resource not found: {e.status_code}")
+except UnauthorizedError as e:
+    print(f"Authentication required: {e}")
+except ForbiddenError as e:
+    print(f"Access denied: {e}")
+except BadRequestError as e:
+    print(f"Invalid request: {e}")
+except ServerError as e:
+    print(f"Server error ({e.status_code}): {e}")
 except TooManyRetriesError as e:
     print(f"Max retries exceeded: {e}")
-except HTTPError as e:
-    print(f"HTTP error: {e}")
+except CircuitOpenError as e:
+    print(f"Circuit breaker open: {e}")
+except ResponseTooLargeError as e:
+    print(f"Response too large: {e}")
+except HTTPClientException as e:
+    print(f"HTTP client error: {e}")
 ```
 
-## 🔄 Migration from v0.x
+### Exception Hierarchy
 
-See [docs/MIGRATION.md](docs/MIGRATION.md) for detailed migration guide.
+```
+HTTPClientException
+├── TemporaryError (retryable)
+│   ├── NetworkError
+│   │   ├── TimeoutError
+│   │   ├── ConnectionError
+│   │   ├── ProxyError
+│   │   └── DNSError
+│   ├── ServerError (5xx)
+│   └── TooManyRequestsError (429)
+└── FatalError (not retryable)
+    ├── HTTPError (4xx)
+    │   ├── BadRequestError (400)
+    │   ├── UnauthorizedError (401)
+    │   ├── ForbiddenError (403)
+    │   └── NotFoundError (404)
+    ├── InvalidResponseError
+    ├── ResponseTooLargeError
+    ├── DecompressionBombError
+    └── CircuitOpenError
+```
 
-**Key Changes:**
-- Configuration system (immutable config objects)
-- POST requests no longer retry by default
-- New exception hierarchy (TemporaryError vs FatalError)
-- Deprecation warnings for old parameters
+## 🔄 Hot Reload Configuration
 
-**Quick Migration:**
+For long-running applications:
 
 ```python
-# Old (v0.x) - Still works with warnings
-client = HTTPClient(
-    base_url="https://api.example.com",
-    max_retries=3,
-    verify_ssl=True
-)
+from http_client import ReloadableHTTPClient
 
-# New (v1.0) - Recommended
-from src.http_client import HTTPClientConfig
+# Automatically reloads config when file changes
+client = ReloadableHTTPClient(config_path="config.yaml")
 
-config = HTTPClientConfig.create(
-    base_url="https://api.example.com",
-    max_retries=3
-)
-client = HTTPClient(config=config)
+# Or with environment variable
+# HTTP_CLIENT_CONFIG_FILE=config.yaml
+client = ReloadableHTTPClient()
 ```
 
-## 📖 Documentation
+## 📋 API Reference
 
-- **[Migration Guide](docs/MIGRATION.md)** - Upgrade from v0.x to v1.0
-- **[Examples](examples/)** - Complete code examples (coming soon)
+### HTTPClient Methods
 
-## 🧪 Testing
+| Method | Description |
+|--------|-------------|
+| `get(url, **kwargs)` | GET request |
+| `post(url, **kwargs)` | POST request |
+| `put(url, **kwargs)` | PUT request |
+| `patch(url, **kwargs)` | PATCH request |
+| `delete(url, **kwargs)` | DELETE request |
+| `head(url, **kwargs)` | HEAD request |
+| `options(url, **kwargs)` | OPTIONS request |
+| `request(method, url, **kwargs)` | Generic request |
+| `download(url, path, **kwargs)` | Stream download |
+| `health_check(test_url=None)` | Health diagnostics |
+| `add_plugin(plugin)` | Add plugin |
+| `remove_plugin(plugin)` | Remove plugin |
+| `close()` | Close client |
+
+### AsyncHTTPClient Methods
+
+Same as HTTPClient, but all methods are async (use `await`).
+
+## ⚠️ Deprecation Notices
+
+The following parameters are deprecated and will be removed in v2.0.0:
+
+| Deprecated | Use Instead |
+|------------|-------------|
+| `max_retries` | `config.retry.max_attempts` |
+| `verify_ssl` | `config.security.verify_ssl` |
+| `pool_connections` | `config.pool.pool_connections` |
+| `pool_maxsize` | `config.pool.pool_maxsize` |
+| `max_redirects` | `config.pool.max_redirects` |
+
+See [Migration Guide](docs/migration/v1-to-v2.md) for details.
+
+## 🧪 Development
 
 ```bash
-# Run all tests
+# Clone repository
+git clone https://github.com/Git-Dalv/http-client-core.git
+cd http-client-core
+
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run tests
 pytest
 
-# Run with coverage
+# Run tests with coverage
 pytest --cov=src/http_client --cov-report=html
 
-# Run specific test file
-pytest tests/unit/core/test_http_client.py -v
+# Code quality checks
+python scripts/check.py
 
-# Run only unit tests
-pytest -m unit
+# Format code
+black src tests
+ruff check src tests --fix
 ```
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file.
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) first.
 
-## 📝 License
+## 📚 Documentation
 
-MIT License - see [LICENSE](LICENSE) file for details.
+- [Migration Guide](docs/migration/v1-to-v2.md)
+- [Plugin Development](docs/plugins.md)
+- [Examples](examples/)
+- [Changelog](CHANGELOG.md)
 
-## 🙏 Acknowledgments
+## 🔗 Links
 
-Built with:
-- [requests](https://requests.readthedocs.io/) - HTTP for Humans
-- [pytest](https://pytest.org/) - Testing framework
-- [responses](https://github.com/getsentry/responses) - Mocking library
-
-## 📊 Project Stats
-
-- ✅ **415** tests passed
-- ✅ **85%** code coverage
-- ✅ **1.0.0** production-ready
-- ✅ **10+** built-in plugins
-- ✅ **Type-safe** configuration
-- ✅ **Immutable** config objects
-- ✅ **Python 3.9+** support
-
----
-
-**Made with ❤️ for the Python community**
+- **Repository**: https://github.com/Git-Dalv/http-client-core
+- **Issues**: https://github.com/Git-Dalv/http-client-core/issues
+- **PyPI**: https://pypi.org/project/http-client-core/
